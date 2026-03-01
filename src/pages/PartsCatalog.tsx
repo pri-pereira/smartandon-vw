@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { motion, AnimatePresence } from "framer-motion";
+import { Plus, Pencil, Trash2, ArrowLeft, RefreshCw, X, Save } from "lucide-react";
 
 interface Part {
     id: number;
@@ -12,47 +14,57 @@ interface Part {
     Codigo_Peca: string;
     Nome_Peca: string;
     CC_Number: string;
+    Cor: string;
 }
 
-export const PartsCatalog = () => {
+const EMPTY_FORM: Omit<Part, "id"> = {
+    Tacto: "",
+    Lado: "LE",
+    Codigo_Peca: "",
+    Nome_Peca: "",
+    CC_Number: "",
+    Cor: "branco",
+};
+
+const COR_OPTIONS = ["branco", "azul", "rosa", "amarelo"];
+const LADO_OPTIONS = ["LE", "LD"];
+
+const PartsCatalog = () => {
     const [parts, setParts] = useState<Part[]>([]);
     const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState("");
+
+    // Modal state
+    const [modalOpen, setModalOpen] = useState(false);
+    const [editingId, setEditingId] = useState<number | null>(null);
+    const [form, setForm] = useState<Omit<Part, "id">>(EMPTY_FORM);
+    const [saving, setSaving] = useState(false);
+
+    // Delete confirm
+    const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
     const navigate = useNavigate();
     const { toast } = useToast();
 
+    // Auth guard
     useEffect(() => {
         const checkAuth = async () => {
             const { data: { user } } = await supabase.auth.getUser();
+            if (!user) { navigate("/"); return; }
 
-            if (!user) {
-                navigate("/");
-                return;
-            }
-
-            // Check for role: admin in user metadata or user_roles table
             const { data: roles } = await supabase
-                .from("user_roles")
-                .select("role")
-                .eq("user_id", user.id)
-                .eq("role", "admin");
+                .from("user_roles").select("role")
+                .eq("user_id", user.id).eq("role", "admin");
 
-            const hasAdminRole = roles && roles.length > 0;
-            const hasMetadataAdmin = user.user_metadata?.role === "admin";
-
-            if (!hasAdminRole && !hasMetadataAdmin) {
-                toast({
-                    title: "Acesso Negado",
-                    description: "Você precisa ter privilégios de administrador para gerenciar o catálogo.",
-                    variant: "destructive"
-                });
+            const isAdmin = (roles && roles.length > 0) || user.user_metadata?.role === "admin";
+            if (!isAdmin) {
+                toast({ title: "Acesso Negado", description: "Apenas administradores podem gerenciar o catálogo.", variant: "destructive" });
                 navigate("/");
                 return;
             }
-
-            // Admin confirmed, load parts
             fetchParts();
         };
-
         checkAuth();
     }, [navigate]);
 
@@ -64,15 +76,69 @@ export const PartsCatalog = () => {
             .order("Tacto", { ascending: true });
 
         if (error) {
-            toast({
-                title: "Erro de Conexão",
-                description: `Não foi possível carregar as peças: ${error.message}`,
-                variant: "destructive"
-            });
+            toast({ title: "Erro de Conexão", description: error.message, variant: "destructive" });
         } else {
             setParts((data as Part[]) || []);
         }
         setLoading(false);
+    };
+
+    // Open modal for NEW part
+    const openNew = () => {
+        setEditingId(null);
+        setForm(EMPTY_FORM);
+        setModalOpen(true);
+    };
+
+    // Open modal for EDIT
+    const openEdit = (part: Part) => {
+        setEditingId(part.id);
+        setForm({ Tacto: part.Tacto, Lado: part.Lado, Codigo_Peca: part.Codigo_Peca, Nome_Peca: part.Nome_Peca, CC_Number: part.CC_Number, Cor: part.Cor || "branco" });
+        setModalOpen(true);
+    };
+
+    // Save (insert or update)
+    const handleSave = async () => {
+        if (!form.Tacto || !form.Codigo_Peca || !form.Nome_Peca) {
+            toast({ title: "Campos obrigatórios", description: "Tacto, Código e Nome são obrigatórios.", variant: "destructive" });
+            return;
+        }
+        setSaving(true);
+        if (editingId === null) {
+            const { error } = await supabase.from("base_pecas_andon").insert(form);
+            if (error) toast({ title: "Erro ao adicionar", description: error.message, variant: "destructive" });
+            else { toast({ title: "✅ Peça adicionada!" }); setModalOpen(false); fetchParts(); }
+        } else {
+            const { error } = await supabase.from("base_pecas_andon").update(form).eq("id", editingId);
+            if (error) toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+            else { toast({ title: "✅ Peça atualizada!" }); setModalOpen(false); fetchParts(); }
+        }
+        setSaving(false);
+    };
+
+    // Delete confirmed
+    const handleDelete = async () => {
+        if (deleteId === null) return;
+        setDeleting(true);
+        const { error } = await supabase.from("base_pecas_andon").delete().eq("id", deleteId);
+        if (error) toast({ title: "Erro ao remover", description: error.message, variant: "destructive" });
+        else { toast({ title: "🗑️ Peça removida." }); fetchParts(); }
+        setDeleteId(null);
+        setDeleting(false);
+    };
+
+    // Filtered list
+    const filtered = parts.filter(p =>
+        (p.Nome_Peca || "").toLowerCase().includes(search.toLowerCase()) ||
+        (p.Codigo_Peca || "").toLowerCase().includes(search.toLowerCase()) ||
+        (p.Tacto || "").includes(search)
+    );
+
+    const COR_BADGE: Record<string, string> = {
+        azul: "bg-blue-100 text-blue-700 border-blue-300",
+        rosa: "bg-pink-100 text-pink-700 border-pink-300",
+        amarelo: "bg-yellow-100 text-yellow-700 border-yellow-300",
+        branco: "bg-gray-100 text-gray-600 border-gray-300",
     };
 
     if (loading) {
@@ -80,7 +146,7 @@ export const PartsCatalog = () => {
             <div className="min-h-screen bg-white font-sans flex flex-col items-center justify-center">
                 <Header />
                 <div className="flex-1 flex flex-col items-center justify-center w-full pb-32">
-                    <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-16 h-16 border-4 border-[#001E50] border-t-transparent rounded-full animate-spin" />
                     <p className="mt-6 text-xl font-bold text-[#001E50]">Carregando Catálogo SmartAndon...</p>
                 </div>
             </div>
@@ -88,55 +154,273 @@ export const PartsCatalog = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col font-sans selection:bg-[#001E50] selection:text-white pb-12">
+        <div className="min-h-screen bg-gray-50 flex flex-col font-sans selection:bg-[#001E50] selection:text-white pb-16">
             <Header />
 
-            <main className="flex-1 w-full max-w-7xl mx-auto px-4 md:px-6 py-10">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 w-full border-b pb-6">
-                    <h2 className="text-3xl md:text-4xl font-black text-[#001E50] tracking-tight border-l-4 border-blue-600 pl-4">
-                        Catálogo de Peças (Gestão)
-                    </h2>
-                    <Button
-                        onClick={fetchParts}
-                        className="w-full md:w-auto bg-[#001E50] hover:bg-blue-900 text-white rounded-xl shadow-lg font-bold px-8 h-12 md:h-14 transition-all hover:scale-105 active:scale-95"
-                    >
-                        Atualizar Dados
-                    </Button>
+            <main className="flex-1 w-full max-w-7xl mx-auto px-4 md:px-6 py-8">
+
+                {/* Page Header */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => navigate("/relatorios")}
+                            className="flex items-center justify-center h-10 w-10 rounded-xl bg-[#001E50]/10 hover:bg-[#001E50]/20 text-[#001E50] transition-colors active:scale-95"
+                            title="Voltar ao Dashboard"
+                        >
+                            <ArrowLeft className="h-5 w-5" />
+                        </button>
+                        <div>
+                            <h1 className="text-2xl md:text-4xl font-black text-[#001E50] tracking-tight">Admin · Peças</h1>
+                            <p className="text-sm text-gray-400 font-medium">{parts.length} peça{parts.length !== 1 ? "s" : ""} cadastrada{parts.length !== 1 ? "s" : ""}</p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 w-full md:w-auto">
+                        <input
+                            type="text"
+                            placeholder="Buscar por nome, código ou tacto..."
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            className="flex-1 md:w-64 h-10 rounded-xl border border-gray-200 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#001E50] bg-white"
+                        />
+                        <button onClick={fetchParts} className="h-10 w-10 flex items-center justify-center rounded-xl bg-white border border-gray-200 hover:bg-gray-50 text-gray-500 transition-colors" title="Atualizar">
+                            <RefreshCw className="h-4 w-4" />
+                        </button>
+                        <button
+                            onClick={openNew}
+                            className="flex items-center gap-2 h-10 bg-[#001E50] hover:bg-[#00287a] text-white font-bold px-4 rounded-xl transition-colors active:scale-95 shadow-sm text-sm"
+                        >
+                            <Plus className="h-4 w-4" />
+                            <span>Nova Peça</span>
+                        </button>
+                    </div>
                 </div>
 
-                <div className="bg-white overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-black/5 rounded-2xl md:rounded-3xl border border-gray-100 flex flex-col w-full">
-                    {/* Scrollable container for mobile */}
-                    <div className="w-full overflow-x-auto">
-                        <table className="w-full min-w-[800px] divide-y divide-gray-100">
-                            <thead className="bg-[#001E50]/5">
-                                <tr>
-                                    <th className="px-6 py-5 text-left text-sm font-black text-[#001E50] uppercase tracking-wider">Tacto</th>
-                                    <th className="px-6 py-5 text-left text-sm font-black text-[#001E50] uppercase tracking-wider">Lado</th>
-                                    <th className="px-6 py-5 text-left text-sm font-black text-[#001E50] uppercase tracking-wider">Código da Peça</th>
-                                    <th className="px-6 py-5 text-left text-sm font-black text-[#001E50] uppercase tracking-wider">Nome da Peça</th>
-                                    <th className="px-6 py-5 text-left text-sm font-black text-[#001E50] uppercase tracking-wider">CC Number</th>
+                {/* Table */}
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-[#001E50] text-white">
+                                    {["Tacto", "Lado", "Código", "Nome da Peça", "CC Number", "Cor", "Ações"].map(h => (
+                                        <th key={h} className="px-4 py-3.5 text-left font-black tracking-wide text-xs uppercase whitespace-nowrap">{h}</th>
+                                    ))}
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100 bg-white">
-                                {parts.map((part) => (
-                                    <tr key={part.id} className="hover:bg-blue-50/50 transition-colors group">
-                                        <td className="whitespace-nowrap px-6 py-4 text-sm font-mono text-blue-600 font-bold group-hover:text-blue-800">{part.Tacto}</td>
-                                        <td className="whitespace-nowrap px-6 py-4 text-sm font-black text-gray-700 bg-gray-50/50">{part.Lado}</td>
-                                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500 font-medium">{part.Codigo_Peca}</td>
-                                        <td className="px-6 py-4 text-sm font-bold text-[#001E50]">{part.Nome_Peca}</td>
-                                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-400 font-medium">{part.CC_Number}</td>
-                                    </tr>
-                                ))}
-                                {parts.length === 0 && (
-                                    <tr>
-                                        <td colSpan={5} className="px-6 py-12 text-center text-gray-400 font-medium">Nenhuma peça cadastrada.</td>
-                                    </tr>
-                                )}
+                            <tbody>
+                                <AnimatePresence>
+                                    {filtered.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={7} className="text-center py-16 text-gray-400 font-medium">
+                                                {search ? "Nenhuma peça encontrada para esta busca." : "Nenhuma peça cadastrada."}
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        filtered.map((part, i) => (
+                                            <motion.tr
+                                                key={part.id}
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                exit={{ opacity: 0 }}
+                                                transition={{ delay: i * 0.02 }}
+                                                className="border-t border-gray-100 hover:bg-gray-50/70 transition-colors"
+                                            >
+                                                <td className="px-4 py-3 font-black text-[#001E50]">{part.Tacto}</td>
+                                                <td className="px-4 py-3">
+                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-black border ${part.Lado === "LE" ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-orange-50 text-orange-700 border-orange-200"}`}>
+                                                        {part.Lado}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 font-mono font-bold text-gray-700">{part.Codigo_Peca}</td>
+                                                <td className="px-4 py-3 font-medium text-gray-800 max-w-[200px] truncate" title={part.Nome_Peca}>{part.Nome_Peca}</td>
+                                                <td className="px-4 py-3 text-gray-500">{part.CC_Number}</td>
+                                                <td className="px-4 py-3">
+                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold border capitalize ${COR_BADGE[part.Cor] || COR_BADGE["branco"]}`}>
+                                                        {part.Cor || "branco"}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => openEdit(part)}
+                                                            className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors"
+                                                            title="Editar"
+                                                        >
+                                                            <Pencil className="h-4 w-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setDeleteId(part.id)}
+                                                            className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors"
+                                                            title="Remover"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </motion.tr>
+                                        ))
+                                    )}
+                                </AnimatePresence>
                             </tbody>
                         </table>
                     </div>
                 </div>
             </main>
+
+            {/* ── ADD / EDIT MODAL ── */}
+            <AnimatePresence>
+                {modalOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center px-4"
+                        style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 24 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 24 }}
+                            transition={{ type: "spring", stiffness: 280, damping: 24 }}
+                            className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden"
+                        >
+                            {/* Modal Header */}
+                            <div className="bg-[#001E50] px-6 py-5 flex items-center justify-between">
+                                <h2 className="text-lg font-black text-white">
+                                    {editingId === null ? "Nova Peça" : "Editar Peça"}
+                                </h2>
+                                <button onClick={() => setModalOpen(false)} className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 transition-colors">
+                                    <X className="h-5 w-5 text-white" />
+                                </button>
+                            </div>
+
+                            {/* Form */}
+                            <div className="px-6 py-5 grid grid-cols-2 gap-4">
+                                {([
+                                    { field: "Tacto", label: "Tacto *", type: "text", placeholder: "ex: 001", col: 1 },
+                                    { field: "Codigo_Peca", label: "Código da Peça *", type: "text", placeholder: "ex: A1B2C", col: 1 },
+                                    { field: "CC_Number", label: "CC Number", type: "text", placeholder: "ex: 1234", col: 1 },
+                                ] as const).map(({ field, label, type, placeholder, col }) => (
+                                    <div key={field} className={col === 1 ? "" : "col-span-2"}>
+                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">{label}</label>
+                                        <input
+                                            type={type}
+                                            value={form[field]}
+                                            onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
+                                            placeholder={placeholder}
+                                            className="w-full h-10 rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#001E50]"
+                                        />
+                                    </div>
+                                ))}
+
+                                {/* Lado */}
+                                <div>
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">Lado *</label>
+                                    <div className="flex gap-2">
+                                        {LADO_OPTIONS.map(l => (
+                                            <button
+                                                key={l}
+                                                type="button"
+                                                onClick={() => setForm(f => ({ ...f, Lado: l }))}
+                                                className={`flex-1 h-10 rounded-xl text-sm font-bold transition-all border ${form.Lado === l ? "bg-[#001E50] text-white border-[#001E50]" : "bg-white text-gray-500 border-gray-200 hover:border-[#001E50]"}`}
+                                            >
+                                                {l}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Nome da Peça - full width */}
+                                <div className="col-span-2">
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">Nome da Peça *</label>
+                                    <input
+                                        type="text"
+                                        value={form.Nome_Peca}
+                                        onChange={e => setForm(f => ({ ...f, Nome_Peca: e.target.value }))}
+                                        placeholder="ex: Vidro Lateral Dianteiro LE"
+                                        className="w-full h-10 rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#001E50]"
+                                    />
+                                </div>
+
+                                {/* Cor */}
+                                <div className="col-span-2">
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">Cor do Card</label>
+                                    <div className="flex gap-2 flex-wrap">
+                                        {COR_OPTIONS.map(cor => (
+                                            <button
+                                                key={cor}
+                                                type="button"
+                                                onClick={() => setForm(f => ({ ...f, Cor: cor }))}
+                                                className={`px-3 h-9 rounded-xl text-sm font-bold capitalize transition-all border ${form.Cor === cor ? "ring-2 ring-[#001E50] ring-offset-1" : ""} ${COR_BADGE[cor] || "bg-gray-100 text-gray-600 border-gray-300"}`}
+                                            >
+                                                {cor}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="px-6 pb-6 flex gap-3">
+                                <button onClick={() => setModalOpen(false)} className="flex-1 h-11 rounded-2xl border border-gray-200 text-gray-500 font-bold hover:bg-gray-50 transition-colors text-sm">
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleSave}
+                                    disabled={saving}
+                                    className="flex-1 h-11 rounded-2xl bg-[#001E50] hover:bg-[#00287a] text-white font-black transition-colors text-sm flex items-center justify-center gap-2 disabled:opacity-60"
+                                >
+                                    <Save className="h-4 w-4" />
+                                    {saving ? "Salvando..." : editingId === null ? "Adicionar" : "Salvar"}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ── DELETE CONFIRM MODAL ── */}
+            <AnimatePresence>
+                {deleteId !== null && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center px-4"
+                        style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 flex flex-col items-center text-center"
+                        >
+                            <div className="p-4 bg-red-50 rounded-2xl mb-4">
+                                <Trash2 className="h-8 w-8 text-red-500" />
+                            </div>
+                            <h2 className="text-xl font-black text-gray-900 mb-2">Tem certeza?</h2>
+                            <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+                                Esta ação é irreversível. A peça será removida permanentemente do catálogo.
+                            </p>
+                            <div className="flex gap-3 w-full">
+                                <button
+                                    onClick={() => setDeleteId(null)}
+                                    className="flex-1 h-11 rounded-2xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleDelete}
+                                    disabled={deleting}
+                                    className="flex-1 h-11 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-black transition-colors disabled:opacity-60"
+                                >
+                                    {deleting ? "Removendo..." : "Remover"}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };
