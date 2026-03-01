@@ -196,7 +196,7 @@ const Relatorios = () => {
         {/* Page Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-4">
           <div className="space-y-1 mt-4 md:mt-0">
-            <h1 className="text-3xl md:text-5xl font-black text-[#001E50] tracking-tight">Relatório</h1>
+            <h1 className="text-3xl md:text-5xl font-black text-[#001E50] tracking-tight">System Analytics</h1>
             <p className="text-base md:text-lg text-gray-400 font-medium">Performance Operacional · {rangeLabel}</p>
             <p className="text-sm text-gray-300 font-medium">{chamados.length} chamado{chamados.length !== 1 ? "s" : ""} no período</p>
           </div>
