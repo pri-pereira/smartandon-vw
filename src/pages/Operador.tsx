@@ -29,6 +29,9 @@ const Operador = () => {
   const [catalogoPecas, setCatalogoPecas] = useState<PecaItem[]>([]);
   const [tactoError, setTactoError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
+  // Committed: last tacto+lado used to submit a chamado — FAB keeps monitoring even after UI resets
+  const [committedTacto, setCommittedTacto] = useState("");
+  const [committedLado, setCommittedLado] = useState<Lado>(null);
   const { toast } = useToast();
 
   // Load parts and validate Poka-Yoke when Tacto or Lado changes
@@ -129,6 +132,10 @@ const Operador = () => {
       toast({ title: "Erro ao enviar", description: error.message, variant: "destructive" });
       return;
     }
+
+    // Commit tacto+lado so the FAB keeps monitoring after the UI resets
+    setCommittedTacto(tacto);
+    setCommittedLado(lado);
 
     setStep("success");
     setTimeout(() => {
@@ -316,8 +323,8 @@ const Operador = () => {
         )}
       </main>
 
-      {/* Floating Confirmation Button — scoped to this terminal's tacto+lado */}
-      <ConfirmacaoFAB tacto={tacto} lado={lado} />
+      {/* Floating Confirmation Button — scoped to committed tacto+lado (persists after UI reset) */}
+      <ConfirmacaoFAB tacto={committedTacto} lado={committedLado} />
     </div>
   );
 };
