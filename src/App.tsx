@@ -9,6 +9,7 @@ import Logistica from "./pages/Logistica";
 import Login from "./pages/Login";
 import LoginLogistica from "./pages/LoginLogistica";
 import Relatorios from "./pages/Relatorios";
+import PartsCatalog from "./pages/PartsCatalog";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/login-logistica" element={<LoginLogistica />} />
           <Route path="/relatorios" element={<Relatorios />} />
+          <Route path="/admin/pecas" element={<PartsCatalog />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
