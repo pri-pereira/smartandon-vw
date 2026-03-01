@@ -6,6 +6,7 @@ import Header from "@/components/Header";
 import NumericKeypad from "@/components/NumericKeypad";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
+import { getCardColorClasses } from "@/utils/colorMap";
 
 type Step = "tacto" | "peca" | "success";
 type Lado = "LE" | "LD" | null;
@@ -122,21 +123,6 @@ const Operador = () => {
         description: `Nenhuma peça cadastrada para Tacto ${tacto} no Lado ${lado}`,
         variant: "destructive"
       });
-    }
-  };
-
-  const getColorStyles = (colorName: string | undefined | null) => {
-    const normalizedColor = colorName?.trim().toLowerCase();
-    switch (normalizedColor) {
-      case "azul":
-        return "bg-blue-100 border-l-8 border-l-blue-400 border-y-2 border-y-transparent border-r-2 border-r-transparent text-gray-900";
-      case "rosa":
-        return "bg-pink-100 border-l-8 border-l-pink-400 border-y-2 border-y-transparent border-r-2 border-r-transparent text-gray-900";
-      case "amarelo":
-        return "bg-yellow-100 border-l-8 border-l-yellow-400 border-y-2 border-y-transparent border-r-2 border-r-transparent text-gray-900";
-      case "branco":
-      default:
-        return "bg-white border-l-8 border-l-gray-300 border-y-2 border-y-transparent border-r-2 border-r-transparent text-gray-900";
     }
   };
 
@@ -328,7 +314,7 @@ const Operador = () => {
             </p>
 
             {/* Bento Grid layout for Parts */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6 w-full">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 w-full px-2">
               {catalogoPecas.map((peca) => (
                 <div
                   key={peca.id}
@@ -336,15 +322,15 @@ const Operador = () => {
                 >
                   <button
                     onClick={() => handleSubmitChamado(peca)}
-                    className={`w-full h-full min-h-[120px] md:min-h-[160px] flex flex-col items-center justify-center p-3 md:p-6 rounded-2xl md:rounded-3xl shadow-lg relative overflow-hidden transition-all hover:brightness-105 active:scale-95 ${getColorStyles(peca.Cor)}`}
+                    className={`w-full h-full min-h-[180px] md:min-h-[220px] flex flex-col items-center justify-center p-6 md:p-10 rounded-2xl md:rounded-3xl shadow-lg relative overflow-hidden transition-all hover:brightness-105 active:scale-95 ${getCardColorClasses(peca.Cor)}`}
                   >
-                    <span className="text-2xl md:text-3xl font-extrabold mb-1 md:mb-2 z-10 drop-shadow-sm">
+                    <span className="text-3xl md:text-5xl font-extrabold mb-2 md:mb-4 z-10 drop-shadow-sm tracking-tight text-center">
                       {peca.Codigo_Peca}
                     </span>
-                    <span className="text-sm md:text-lg font-medium text-center z-10 leading-tight line-clamp-2 md:line-clamp-none">
+                    <span className="text-xl md:text-3xl font-black text-center z-10 leading-tight line-clamp-2 md:line-clamp-none opacity-90">
                       {peca.Nome_Peca}
                     </span>
-                    <span className="text-xs font-bold mt-6 z-10 opacity-70">
+                    <span className="text-base md:text-lg font-bold mt-6 md:mt-8 z-10 opacity-70 uppercase tracking-widest">
                       CC: {peca.CC_Number}
                     </span>
                   </button>

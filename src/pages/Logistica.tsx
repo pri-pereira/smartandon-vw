@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Package, CheckCircle, Clock, AlertTriangle, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { getCardColorClasses } from "@/utils/colorMap";
 
 interface Chamado {
   id: string;
@@ -240,9 +241,8 @@ const Logistica = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                    className={`relative w-full rounded-3xl shadow-lg border-2 overflow-hidden flex flex-col ${chamado.isWaiting ? "opacity-75 grayscale-[30%]" : ""
-                      } ${chamado.isCritical && !chamado.isWaiting ? "animate-pulse border-red-500" : "border-transparent"}`}
-                    style={{ backgroundColor: chamado.cor_peca, color: "#000000" }}
+                    className={`relative w-full rounded-3xl shadow-lg overflow-hidden flex flex-col ${chamado.isWaiting ? "opacity-75 grayscale-[30%]" : ""
+                      } ${chamado.isCritical && !chamado.isWaiting ? "animate-pulse ring-4 ring-red-500 ring-offset-2" : ""} ${getCardColorClasses(chamado.cor_peca)}`}
                   >
                     {/* Main Content Area */}
                     <div className="flex-1 p-2 flex flex-col gap-2 relative z-10 font-bold">
