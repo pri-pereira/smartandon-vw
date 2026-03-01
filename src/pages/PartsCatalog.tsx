@@ -81,7 +81,7 @@ export const PartsCatalog = () => {
                 <Header />
                 <div className="flex-1 flex flex-col items-center justify-center w-full pb-32">
                     <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                    <p className="mt-6 text-xl font-bold text-[#001E50]">Carregando Catálogo SmartAndon VW...</p>
+                    <p className="mt-6 text-xl font-bold text-[#001E50]">Carregando Catálogo SmartAndon...</p>
                 </div>
             </div>
         );

@@ -1,4 +1,4 @@
-import { Factory, Home, Database } from "lucide-react";
+import { Home, Database } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
@@ -36,9 +36,9 @@ const Header = () => {
         <Home className="h-8 w-8" />
       </Button>
       <button onClick={() => navigate("/")} className="flex items-center gap-3">
-        <Factory className="h-8 w-8 text-primary-foreground" />
+        <img src="/vw-logo.svg" alt="VW Logo" className="h-8 w-8" />
         <span className="text-xl font-bold text-primary-foreground tracking-wide hidden sm:inline">
-          SMARTANDON VW
+          SMARTANDON
         </span>
       </button>
 

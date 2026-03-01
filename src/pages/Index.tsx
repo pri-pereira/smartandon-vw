@@ -24,7 +24,7 @@ const Index = () => {
           className="text-xl md:text-3xl lg:text-4xl font-bold text-[#001E50] text-center tracking-tight"
           style={{ fontFamily: "'Inter', sans-serif" }}
         >
-          SmartAndon VW
+          SmartAndon
         </motion.h1>
       </header>
 
