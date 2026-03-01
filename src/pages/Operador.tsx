@@ -21,6 +21,7 @@ interface PecaItem {
   Codigo_Peca: string;
   Nome_Peca: string;
   CC_Number: string;
+  Cor: string;
 }
 
 const Operador = () => {
@@ -124,14 +125,19 @@ const Operador = () => {
     }
   };
 
-  const getTextColor = (hex: string) => {
-    if (!hex) return "#001E50";
-    const hexClean = hex.replace("#", "");
-    const r = parseInt(hexClean.slice(0, 2), 16) || 0;
-    const g = parseInt(hexClean.slice(2, 4), 16) || 0;
-    const b = parseInt(hexClean.slice(4, 6), 16) || 0;
-    const yiq = (r * 299 + g * 587 + b * 114) / 1000;
-    return yiq >= 128 ? "#001E50" : "#FFFFFF";
+  const getColorStyles = (colorName: string | undefined | null) => {
+    const normalizedColor = colorName?.trim().toLowerCase();
+    switch (normalizedColor) {
+      case "azul":
+        return "bg-blue-100 border-l-8 border-l-blue-400 border-y-2 border-y-transparent border-r-2 border-r-transparent text-gray-900";
+      case "rosa":
+        return "bg-pink-100 border-l-8 border-l-pink-400 border-y-2 border-y-transparent border-r-2 border-r-transparent text-gray-900";
+      case "amarelo":
+        return "bg-yellow-100 border-l-8 border-l-yellow-400 border-y-2 border-y-transparent border-r-2 border-r-transparent text-gray-900";
+      case "branco":
+      default:
+        return "bg-white border-l-8 border-l-gray-300 border-y-2 border-y-transparent border-r-2 border-r-transparent text-gray-900";
+    }
   };
 
   const getSaoPauloTimestamp = () => {
@@ -159,7 +165,7 @@ const Operador = () => {
       codigo_peca: peca.Codigo_Peca,
       nome_peca: peca.Nome_Peca,
       cost_center: peca.CC_Number,
-      cor_peca: "#001E50", // Padronizado provisoriamente
+      cor_peca: peca.Cor,
       rack_location: "N/A", // Valor Padrão para evitar erros de db
       barcode_value: peca.Codigo_Peca,
       created_at: getSaoPauloTimestamp(),
@@ -330,7 +336,7 @@ const Operador = () => {
                 >
                   <button
                     onClick={() => handleSubmitChamado(peca)}
-                    className="w-full h-full min-h-[120px] md:min-h-[160px] flex flex-col items-center justify-center p-3 md:p-6 rounded-2xl md:rounded-3xl border border-white/20 shadow-lg relative overflow-hidden transition-all hover:brightness-105 bg-white text-[#001E50]"
+                    className={`w-full h-full min-h-[120px] md:min-h-[160px] flex flex-col items-center justify-center p-3 md:p-6 rounded-2xl md:rounded-3xl shadow-lg relative overflow-hidden transition-all hover:brightness-105 active:scale-95 ${getColorStyles(peca.Cor)}`}
                   >
                     <span className="text-2xl md:text-3xl font-extrabold mb-1 md:mb-2 z-10 drop-shadow-sm">
                       {peca.Codigo_Peca}
@@ -338,7 +344,7 @@ const Operador = () => {
                     <span className="text-sm md:text-lg font-medium text-center z-10 leading-tight line-clamp-2 md:line-clamp-none">
                       {peca.Nome_Peca}
                     </span>
-                    <span className="text-xs font-bold mt-6 z-10 text-gray-400">
+                    <span className="text-xs font-bold mt-6 z-10 opacity-70">
                       CC: {peca.CC_Number}
                     </span>
                   </button>
