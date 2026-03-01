@@ -1,16 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Package, CheckCircle2, AlertTriangle, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useRealtimeOrders, RealtimeOrder } from "@/hooks/useRealtimeOrders";
 
-interface PendingDelivery {
-    id: string;
-    nome_peca: string;
-    codigo_peca: string;
+interface ConfirmacaoFABProps {
     tacto: string;
-    lado: string;
-    cor_peca?: string;
+    lado: string | null;
 }
 
 const getSaoPauloTimestamp = () => {
@@ -26,64 +23,20 @@ const getSaoPauloTimestamp = () => {
     }
 };
 
-const ConfirmacaoFAB = () => {
-    const [pendingDeliveries, setPendingDeliveries] = useState<PendingDelivery[]>([]);
+const ConfirmacaoFAB = ({ tacto, lado }: ConfirmacaoFABProps) => {
+    const { pendingOrders } = useRealtimeOrders(tacto, lado);
     const [modalOpen, setModalOpen] = useState(false);
-    const [selected, setSelected] = useState<PendingDelivery | null>(null);
+    const [selected, setSelected] = useState<RealtimeOrder | null>(null);
     const [loading, setLoading] = useState(false);
     const { toast } = useToast();
 
-    // Fetch any existing 'entregue' chamados on mount
-    useEffect(() => {
-        const fetchPending = async () => {
-            const { data } = await supabase
-                .from("chamados")
-                .select("id, nome_peca, codigo_peca, tacto, lado, cor_peca")
-                .eq("status", "entregue");
-            if (data && data.length > 0) {
-                setPendingDeliveries(data as PendingDelivery[]);
-            }
-        };
-        fetchPending();
+    // No pending orders → nothing to show
+    if (pendingOrders.length === 0) return null;
 
-        // Realtime: listen for any UPDATE that sets status = entregue
-        const channel = supabase
-            .channel("fab-delivery-watcher")
-            .on(
-                "postgres_changes",
-                { event: "UPDATE", schema: "public", table: "chamados" },
-                (payload) => {
-                    const record = payload.new as any;
-                    if (record.status === "entregue") {
-                        setPendingDeliveries((prev) => {
-                            const already = prev.find((p) => p.id === record.id);
-                            if (already) return prev;
-                            return [
-                                ...prev,
-                                {
-                                    id: record.id,
-                                    nome_peca: record.nome_peca,
-                                    codigo_peca: record.codigo_peca,
-                                    tacto: record.tacto,
-                                    lado: record.lado,
-                                    cor_peca: record.cor_peca,
-                                },
-                            ];
-                        });
-                    }
-                    // If status changes away from 'entregue', remove it
-                    if (record.status !== "entregue") {
-                        setPendingDeliveries((prev) => prev.filter((p) => p.id !== record.id));
-                    }
-                }
-            )
-            .subscribe();
+    const first = pendingOrders[0];
 
-        return () => { supabase.removeChannel(channel); };
-    }, []);
-
-    const openModal = (delivery: PendingDelivery) => {
-        setSelected(delivery);
+    const openModal = (order: RealtimeOrder) => {
+        setSelected(order);
         setModalOpen(true);
     };
 
@@ -93,14 +46,13 @@ const ConfirmacaoFAB = () => {
         const now = getSaoPauloTimestamp();
         const { error } = await supabase
             .from("chamados")
-            .update({ status: "confirmado", confirmado_at: now })
+            .update({ status: "concluido", confirmado_at: now })
             .eq("id", selected.id);
 
         if (error) {
             toast({ title: "Erro ao confirmar", description: error.message, variant: "destructive" });
         } else {
-            setPendingDeliveries((prev) => prev.filter((p) => p.id !== selected.id));
-            toast({ title: "✅ Recebimento confirmado!", description: `Peça ${selected.nome_peca} registrada.` });
+            toast({ title: "✅ Recebimento confirmado!", description: `Peça ${selected.nome_peca} recebida com sucesso.` });
             setModalOpen(false);
             setSelected(null);
         }
@@ -112,16 +64,15 @@ const ConfirmacaoFAB = () => {
         setLoading(true);
         const { error } = await supabase
             .from("chamados")
-            .update({ status: "pendente" })
+            .update({ status: "divergencia" })
             .eq("id", selected.id);
 
         if (error) {
             toast({ title: "Erro", description: error.message, variant: "destructive" });
         } else {
-            setPendingDeliveries((prev) => prev.filter((p) => p.id !== selected.id));
             toast({
-                title: "⚠️ Divergência registrada",
-                description: "O chamado foi devolvido para a logística revisar.",
+                title: "⚠️ Divergência registrada!",
+                description: "A logística foi notificada. Aguarde o atendimento.",
                 variant: "destructive",
             });
             setModalOpen(false);
@@ -130,28 +81,28 @@ const ConfirmacaoFAB = () => {
         setLoading(false);
     };
 
-    if (pendingDeliveries.length === 0) return null;
-
-    const first = pendingDeliveries[0];
-
     return (
         <>
             {/* ====== FLOATING ACTION BUTTON ====== */}
             <AnimatePresence>
                 <motion.button
+                    key="fab"
                     initial={{ scale: 0, opacity: 0, y: 20 }}
                     animate={{ scale: 1, opacity: 1, y: 0 }}
                     exit={{ scale: 0, opacity: 0, y: 20 }}
                     transition={{ type: "spring", stiffness: 300, damping: 22 }}
                     onClick={() => openModal(first)}
-                    className="fixed bottom-6 right-4 z-[9000] flex items-center gap-3 bg-[#001E50] hover:bg-[#00287a] text-white font-black rounded-2xl shadow-2xl px-5 py-4 active:scale-95 transition-all"
+                    className="fixed bottom-6 right-4 z-[9000] flex items-center gap-3 bg-[#001E50] hover:bg-[#00287a] text-white font-black rounded-2xl shadow-2xl px-5 py-4 active:scale-95 transition-colors"
                     style={{ boxShadow: "0 8px 32px rgba(0,30,80,0.45)" }}
                 >
+                    {/* Pulse ring */}
+                    <span className="absolute inset-0 rounded-2xl animate-ping bg-[#001E50]/30 pointer-events-none" />
+
                     <div className="relative flex-shrink-0">
                         <Package className="h-6 w-6" />
-                        {pendingDeliveries.length > 1 && (
+                        {pendingOrders.length > 1 && (
                             <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black rounded-full h-4 w-4 flex items-center justify-center">
-                                {pendingDeliveries.length}
+                                {pendingOrders.length}
                             </span>
                         )}
                     </div>
@@ -163,8 +114,6 @@ const ConfirmacaoFAB = () => {
                             Tacto {first.tacto} · {first.lado}
                         </span>
                     </div>
-                    {/* Pulse ring */}
-                    <span className="absolute inset-0 rounded-2xl animate-ping bg-[#001E50]/30 pointer-events-none" />
                 </motion.button>
             </AnimatePresence>
 
@@ -172,18 +121,20 @@ const ConfirmacaoFAB = () => {
             <AnimatePresence>
                 {modalOpen && selected && (
                     <motion.div
+                        key="modal-backdrop"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[9500] flex items-center justify-center px-4 pb-4"
-                        style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)" }}
+                        className="fixed inset-0 z-[9500] flex items-center justify-center px-4"
+                        style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)" }}
                     >
                         <motion.div
+                            key="modal-content"
                             initial={{ scale: 0.9, opacity: 0, y: 24 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
                             exit={{ scale: 0.9, opacity: 0, y: 24 }}
                             transition={{ type: "spring", stiffness: 280, damping: 24 }}
-                            className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+                            className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden"
                         >
                             {/* Modal Header */}
                             <div className="bg-[#001E50] px-6 pt-6 pb-5 relative">
@@ -193,52 +144,54 @@ const ConfirmacaoFAB = () => {
                                 >
                                     <X className="h-5 w-5 text-white" />
                                 </button>
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="p-2.5 bg-white/15 rounded-xl">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2.5 bg-white/15 rounded-xl flex-shrink-0">
                                         <Package className="h-7 w-7 text-white" />
                                     </div>
                                     <div>
-                                        <p className="text-white/70 text-xs font-bold uppercase tracking-widest">Logística confirmou entrega</p>
-                                        <h2 className="text-xl font-black text-white leading-tight">Peça na Célula!</h2>
+                                        <p className="text-white/60 text-xs font-bold uppercase tracking-widest">Entrega no Posto</p>
+                                        <h2 className="text-xl font-black text-white leading-tight">
+                                            A peça <span className="underline decoration-dotted">{selected.nome_peca}</span> foi recebida no posto?
+                                        </h2>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Delivery Details */}
                             <div className="px-6 py-5 flex flex-col gap-4">
-                                <div className="bg-gray-50 rounded-2xl p-4 flex flex-col gap-2">
-                                    <div className="flex justify-between items-start">
-                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Peça</span>
+                                <div className="bg-gray-50 rounded-2xl p-4 flex flex-col gap-2 border border-gray-100">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Pedido</span>
                                         <span className="text-xs font-bold bg-[#001E50]/10 text-[#001E50] px-2 py-0.5 rounded-full">
                                             TACTO {selected.tacto} · {selected.lado}
                                         </span>
                                     </div>
                                     <p className="text-2xl font-black text-[#001E50] tracking-tight">{selected.codigo_peca}</p>
-                                    <p className="text-base font-bold text-gray-700 leading-snug">{selected.nome_peca}</p>
+                                    <p className="text-sm font-bold text-gray-600 leading-snug">{selected.nome_peca}</p>
                                 </div>
 
-                                <p className="text-sm text-gray-500 text-center leading-relaxed">
-                                    Verifique se a peça entregue corresponde à etiqueta física antes de confirmar.
+                                <p className="text-xs text-gray-400 text-center">
+                                    Verifique se a peça corresponde ao código na etiqueta física.
                                 </p>
 
                                 {/* Action Buttons */}
-                                <div className="flex flex-col gap-3 mt-1">
+                                <div className="flex flex-col gap-2.5">
                                     <button
                                         onClick={handleConfirm}
                                         disabled={loading}
                                         className="w-full h-14 bg-green-600 hover:bg-green-700 active:scale-95 text-white font-black text-lg rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60"
                                     >
-                                        <CheckCircle2 className="h-6 w-6" />
-                                        {loading ? "Confirmando..." : "Confirmar OK"}
+                                        <CheckCircle2 className="h-5 w-5 flex-shrink-0" />
+                                        {loading ? "Confirmando..." : "Sim, Recebi ✓"}
                                     </button>
 
                                     <button
                                         onClick={handleDivergencia}
                                         disabled={loading}
-                                        className="w-full h-12 bg-red-50 hover:bg-red-100 active:scale-95 text-red-600 font-bold text-base rounded-2xl border-2 border-red-200 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                                        className="w-full h-12 bg-red-50 hover:bg-red-100 active:scale-95 text-red-600 font-bold text-sm rounded-2xl border-2 border-red-200 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
                                     >
-                                        <AlertTriangle className="h-5 w-5" />
-                                        Divergência / Não Recebi
+                                        <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                                        Não recebi (Divergência)
                                     </button>
                                 </div>
                             </div>

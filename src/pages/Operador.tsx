@@ -316,8 +316,8 @@ const Operador = () => {
         )}
       </main>
 
-      {/* Floating Confirmation Button */}
-      <ConfirmacaoFAB />
+      {/* Floating Confirmation Button — scoped to this terminal's tacto+lado */}
+      <ConfirmacaoFAB tacto={tacto} lado={lado} />
     </div>
   );
 };

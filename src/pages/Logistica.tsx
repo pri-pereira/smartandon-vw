@@ -62,7 +62,7 @@ const Logistica = () => {
       .from("chamados")
       .select("*")
       .gte("created_at", startOfDay)
-      .in("status", ["pendente", "entregue", "aguardando_confirmacao"])
+      .in("status", ["pendente", "entregue_no_posto", "aguardando_confirmacao"])
       .order("created_at", { ascending: true }); // We will sort manually by urgency anyway
 
     if (data) setChamados(data as Chamado[]);
@@ -116,7 +116,7 @@ const Logistica = () => {
     await supabase
       .from("chamados")
       .update({
-        status: "entregue",
+        status: "entregue_no_posto",
         entregue_at: getSaoPauloTimestamp(),
       })
       .eq("id", id);
@@ -139,7 +139,7 @@ const Logistica = () => {
 
   // Calculate stats
   const pendentes = chamados.filter((c) => c.status === "pendente").length;
-  const aguardando = chamados.filter((c) => c.status === "entregue" || c.status === "aguardando_confirmacao").length;
+  const aguardando = chamados.filter((c) => c.status === "entregue_no_posto" || c.status === "aguardando_confirmacao").length;
 
   // Enhance chamados with time data and urgency sorting
   const MAX_TIME_S = 600; // 10 minutes
@@ -171,7 +171,7 @@ const Logistica = () => {
       barColor,
       isCritical: cappedElapsed >= 550, // Very critical
       timeString: `${mins}:${secs}`,
-      isWaiting: c.status === "entregue" || c.status === "aguardando_confirmacao"
+      isWaiting: c.status === "entregue_no_posto" || c.status === "aguardando_confirmacao"
     };
   });
 
