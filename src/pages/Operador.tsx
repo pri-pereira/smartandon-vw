@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Header";
@@ -18,12 +18,9 @@ interface PendingDelivery {
 
 interface PecaItem {
   id: string;
-  part_number: string;
-  rack_location: string;
-  description: string;
-  cost_center: string;
-  barcode_value: string;
-  cor: string;
+  Codigo_Peca: string;
+  Nome_Peca: string;
+  CC_Number: string;
 }
 
 const Operador = () => {
@@ -32,18 +29,57 @@ const Operador = () => {
   const [lado, setLado] = useState<Lado>(null);
   const [catalogoPecas, setCatalogoPecas] = useState<PecaItem[]>([]);
   const [pendingDelivery, setPendingDelivery] = useState<PendingDelivery | null>(null);
+  const [tactoError, setTactoError] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
   const { toast } = useToast();
 
-  // Load all parts on mount
+  // Load parts and validate Poka-Yoke when Tacto or Lado changes
   useEffect(() => {
-    const fetchCatalog = async () => {
-      const { data, error } = await supabase.from("logistics_inventory").select("*");
-      if (!error && data) {
-        setCatalogoPecas(data as PecaItem[]);
+    const validateTacto = async () => {
+      // Basic check
+      if (tacto.length < 3) {
+        setTactoError(null);
+        setCatalogoPecas([]);
+        return;
       }
+
+      setIsValidating(true);
+
+      // Consult base_pecas_andon by Tacto
+      const { data: tactoData, error: tactoErrorSupabase } = await supabase
+        .from("base_pecas_andon")
+        .select("*")
+        .eq("Tacto", tacto);
+
+      if (tactoErrorSupabase || !tactoData || tactoData.length === 0) {
+        setTactoError(`Tacto ${tacto} não registrado`);
+        setCatalogoPecas([]);
+        setIsValidating(false);
+        return;
+      }
+
+      // If Tacto exists, clear Tacto error.
+      setTactoError(null);
+
+      // Filter by Lado if selected
+      if (lado) {
+        const filteredParts = tactoData.filter((p) => p.Lado === lado);
+        setCatalogoPecas(filteredParts as PecaItem[]);
+      } else {
+        // Just the tacto is valid, but no parts to show yet until Lado is chosen
+        setCatalogoPecas([]);
+      }
+
+      setIsValidating(false);
     };
-    fetchCatalog();
-  }, []);
+
+    // Debounce to avoid validating every single keystroke excessively
+    const timeoutId = setTimeout(() => {
+      validateTacto();
+    }, 400);
+
+    return () => clearTimeout(timeoutId);
+  }, [tacto, lado]);
 
   // Realtime listener for logistics double-check deliveries
   useEffect(() => {
@@ -76,8 +112,15 @@ const Operador = () => {
   }, []);
 
   const handleConfirmTacto = () => {
-    if (tacto.length >= 3 && lado) {
+    // Only proceed if there's no error, tacto is filled, lado is selected, and we found parts
+    if (tacto.length >= 3 && lado && !tactoError && catalogoPecas.length > 0) {
       setStep("peca");
+    } else if (tacto.length >= 3 && lado && !tactoError && catalogoPecas.length === 0) {
+      toast({
+        title: "Atenção",
+        description: `Nenhuma peça cadastrada para Tacto ${tacto} no Lado ${lado}`,
+        variant: "destructive"
+      });
     }
   };
 
@@ -113,12 +156,12 @@ const Operador = () => {
     const { error } = await supabase.from("chamados").insert({
       tacto,
       lado,
-      codigo_peca: peca.part_number,
-      nome_peca: peca.description,
-      cor_peca: peca.cor,
-      cost_center: peca.cost_center,
-      barcode_value: peca.barcode_value,
-      rack_location: peca.rack_location,
+      codigo_peca: peca.Codigo_Peca,
+      nome_peca: peca.Nome_Peca,
+      cost_center: peca.CC_Number,
+      cor_peca: "#001E50", // Padronizado provisoriamente
+      rack_location: "N/A", // Valor Padrão para evitar erros de db
+      barcode_value: peca.Codigo_Peca,
       created_at: getSaoPauloTimestamp(),
     });
 
@@ -204,14 +247,32 @@ const Operador = () => {
 
             <div className="w-full text-center mt-2 max-w-lg">
               <h2 className="text-xl md:text-2xl font-bold text-[#001E50] mb-6">INFORME O TACTO</h2>
-              <div className="w-full bg-slate-50 rounded-3xl py-6 text-center border-2 border-transparent focus-within:border-[#001E50] transition-colors shadow-sm">
-                <span className="text-5xl font-mono font-bold text-[#001E50] tracking-widest">
+              <div className={`w-full bg-slate-50 rounded-3xl py-6 text-center border-2 transition-colors shadow-sm ${tactoError ? "border-red-500 bg-red-50 focus-within:border-red-600" : "border-transparent focus-within:border-[#001E50]"}`}>
+                <span className={`text-5xl font-mono font-bold tracking-widest ${tactoError ? "text-red-500" : "text-[#001E50]"}`}>
                   {tacto || "---"}
                 </span>
               </div>
+
+              {/* Feedback de Poka-Yoke Status */}
+              <div className="h-8 mt-2 flex items-center justify-center">
+                {tactoError ? (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center text-red-500 font-bold gap-2">
+                    <AlertTriangle className="h-5 w-5" />
+                    <span>{tactoError}</span>
+                  </motion.div>
+                ) : tacto.length > 2 && lado && isValidating ? (
+                  <span className="text-gray-400 font-medium animate-pulse">Verificando...</span>
+                ) : tacto.length > 2 && !lado ? (
+                  <span className="text-[#001E50] font-medium font-bold">Selecione o Lado</span>
+                ) : tacto.length > 2 && lado && catalogoPecas.length === 0 ? (
+                  <span className="text-orange-500 font-bold">Sem peças para o Lado selecionado</span>
+                ) : (
+                  <span className="text-transparent">N/A</span>
+                )}
+              </div>
             </div>
 
-            <div className="w-full max-w-lg transform scale-100 md:scale-125 origin-top mt-4 mb-4 md:mb-24">
+            <div className="w-full max-w-lg transform scale-100 md:scale-125 origin-top mt-2 mb-4 md:mb-24">
               <NumericKeypad value={tacto} onChange={setTacto} maxLength={5} />
             </div>
 
@@ -224,11 +285,11 @@ const Operador = () => {
                 LIMPAR
               </Button>
               <Button
-                className={`flex-1 h-16 text-xl rounded-2xl shadow-md transition-all ${tacto.length >= 3 && lado
+                className={`flex-1 h-16 text-xl rounded-2xl shadow-md transition-all ${tacto.length >= 3 && lado && !tactoError && catalogoPecas.length > 0
                   ? "bg-[#001E50] hover:bg-[#001538] text-white"
-                  : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                  : "bg-gray-200 text-gray-400 cursor-not-allowed"
                   }`}
-                disabled={!(tacto.length >= 3 && lado)}
+                disabled={!(tacto.length >= 3 && lado && !tactoError && catalogoPecas.length > 0)}
                 onClick={handleConfirmTacto}
               >
                 CONFIRMAR
@@ -269,20 +330,16 @@ const Operador = () => {
                 >
                   <button
                     onClick={() => handleSubmitChamado(peca)}
-                    className="w-full h-full min-h-[120px] md:min-h-[160px] flex flex-col items-center justify-center p-3 md:p-6 rounded-2xl md:rounded-3xl border border-white/20 shadow-lg relative overflow-hidden transition-all hover:brightness-105"
-                    style={{
-                      backgroundColor: peca.cor,
-                      color: getTextColor(peca.cor)
-                    }}
+                    className="w-full h-full min-h-[120px] md:min-h-[160px] flex flex-col items-center justify-center p-3 md:p-6 rounded-2xl md:rounded-3xl border border-white/20 shadow-lg relative overflow-hidden transition-all hover:brightness-105 bg-white text-[#001E50]"
                   >
                     <span className="text-2xl md:text-3xl font-extrabold mb-1 md:mb-2 z-10 drop-shadow-sm">
-                      {peca.part_number}
+                      {peca.Codigo_Peca}
                     </span>
                     <span className="text-sm md:text-lg font-medium text-center z-10 leading-tight line-clamp-2 md:line-clamp-none">
-                      {peca.description}
+                      {peca.Nome_Peca}
                     </span>
-                    <span className="text-xs font-bold opacity-70 mt-6 z-10">
-                      Cod: {peca.part_number}
+                    <span className="text-xs font-bold mt-6 z-10 text-gray-400">
+                      CC: {peca.CC_Number}
                     </span>
                   </button>
                 </div>
