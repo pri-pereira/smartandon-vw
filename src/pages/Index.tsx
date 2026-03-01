@@ -26,6 +26,14 @@ const Index = () => {
         >
           SmartAndon
         </motion.h1>
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6, delay: 0.35 }}
+          className="text-sm md:text-base text-gray-400 font-medium tracking-widest uppercase mt-1 text-center"
+        >
+          Volkswagen Taubaté
+        </motion.p>
       </header>
 
       {/* Main Profiles */}
