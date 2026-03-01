@@ -9,7 +9,7 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
-import { LogOut, Calendar, Activity, Clock, Zap, ChevronRight } from "lucide-react";
+import { LogOut, Calendar, Activity, Clock, Zap, ChevronRight, Trash2, FileDown, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Chamado {
@@ -31,6 +31,8 @@ const Relatorios = () => {
 
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   // Auth guard
   useEffect(() => {
@@ -69,6 +71,79 @@ const Relatorios = () => {
   }, [dateFrom, dateTo, loading]);
 
   const handleLogout = async () => { await supabase.auth.signOut(); navigate("/"); };
+
+  // ── Clear Logistica screen (archive active chamados preserving data for reports) ──
+  const handleClearLogistica = async () => {
+    setClearing(true);
+    const { error } = await supabase
+      .from("chamados")
+      .update({ status: "arquivado" })
+      .in("status", ["pendente", "entregue", "aguardando_confirmacao"]);
+    if (error) {
+      toast({ title: "Erro ao limpar", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "✅ Tela da Logística limpa!", description: "Os dados continuam salvos nos relatórios." });
+    }
+    setClearConfirmOpen(false);
+    setClearing(false);
+  };
+
+  // ── Export PDF (opens print-optimised window) ──
+  const handleExportPDF = () => {
+    const rows = chamados.map(c => {
+      const react = getDiff(c.created_at, c.entregue_at);
+      const close = getDiff(c.entregue_at, c.confirmado_at);
+      const lead = getDiff(c.created_at, c.confirmado_at);
+      return `<tr>
+        <td>${c.tacto ?? "—"}</td>
+        <td>${format(parseISO(c.created_at), "dd/MM/yyyy HH:mm")}</td>
+        <td>${c.status}</td>
+        <td>${react !== null ? fmt(react) : "—"}</td>
+        <td>${close !== null ? fmt(close) : "—"}</td>
+        <td>${lead !== null ? fmt(lead) : "—"}</td>
+      </tr>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head>
+      <meta charset="UTF-8">
+      <title>System Analytics – ${rangeLabel}</title>
+      <style>
+        body { font-family: Arial, sans-serif; color: #111; margin: 24px; }
+        h1 { color: #001E50; margin-bottom: 4px; }
+        p.sub { color: #666; margin: 0 0 20px; font-size: 13px; }
+        .kpi-grid { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+        .kpi { background: #f5f7fa; border-radius: 8px; padding: 14px 20px; min-width: 140px; }
+        .kpi-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .05em; }
+        .kpi-value { font-size: 22px; font-weight: 900; color: #001E50; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th { background: #001E50; color: #fff; padding: 8px 10px; text-align: left; }
+        td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; }
+        tr:nth-child(even) td { background: #f9fafb; }
+        @media print { body { margin: 0; } button { display: none; } }
+      </style>
+    </head><body>
+      <h1>System Analytics · SmartAndon VW</h1>
+      <p class="sub">Período: ${rangeLabel} &nbsp;·&nbsp; ${chamados.length} chamados</p>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-label">Tempo de Reação</div><div class="kpi-value">${fmt(avgReaction)}</div></div>
+        <div class="kpi"><div class="kpi-label">Tempo de Fechamento</div><div class="kpi-value">${fmt(avgClose)}</div></div>
+        <div class="kpi"><div class="kpi-label">Lead Time Total</div><div class="kpi-value">${fmt(avgLeadTime)}</div></div>
+        <div class="kpi"><div class="kpi-label">Total Chamados</div><div class="kpi-value">${chamados.length}</div></div>
+      </div>
+      <table>
+        <thead><tr><th>Tacto</th><th>Data/Hora</th><th>Status</th><th>T. Reação</th><th>T. Fechamento</th><th>Lead Time</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p style="margin-top:20px;font-size:11px;color:#aaa;">Exportado em ${format(new Date(), "dd/MM/yyyy HH:mm")} · Equipe de MP VW Taubaté</p>
+    </body></html>`;
+
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      win.print();
+    }
+  };
 
   // Metric helpers
   const getDiff = (start: string | null, end: string | null) => {
@@ -200,9 +275,28 @@ const Relatorios = () => {
             <p className="text-base md:text-lg text-gray-400 font-medium">Performance Operacional · {rangeLabel}</p>
             <p className="text-sm text-gray-300 font-medium">{chamados.length} chamado{chamados.length !== 1 ? "s" : ""} no período</p>
           </div>
-          <Button variant="outline" onClick={handleLogout} className="rounded-2xl border-gray-200 text-gray-500 hover:text-[#001E50] hover:border-[#001E50] font-bold px-4 md:px-6 w-full md:w-auto">
-            <LogOut className="h-5 w-5 mr-2" /> Encerrar Sessão
-          </Button>
+          <div className="flex flex-wrap gap-3 w-full md:w-auto">
+            {/* Limpar tela da logística */}
+            <button
+              onClick={() => setClearConfirmOpen(true)}
+              className="flex items-center gap-2 h-11 px-4 rounded-2xl bg-red-50 hover:bg-red-100 text-red-600 font-bold border border-red-100 transition-colors text-sm"
+            >
+              <Trash2 className="h-4 w-4" />
+              Limpar Rastreamento
+            </button>
+            {/* Export PDF */}
+            <button
+              onClick={handleExportPDF}
+              disabled={chamados.length === 0}
+              className="flex items-center gap-2 h-11 px-4 rounded-2xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold border border-emerald-100 transition-colors text-sm disabled:opacity-40"
+            >
+              <FileDown className="h-4 w-4" />
+              Exportar PDF
+            </button>
+            <Button variant="outline" onClick={handleLogout} className="rounded-2xl border-gray-200 text-gray-500 hover:text-[#001E50] hover:border-[#001E50] font-bold px-4 h-11">
+              <LogOut className="h-4 w-4 mr-2" /> Encerrar Sessão
+            </Button>
+          </div>
         </div>
 
         {/* KPI Cards */}
@@ -310,6 +404,50 @@ const Relatorios = () => {
         </motion.div>
 
       </main>
+
+      {/* ── Clear Confirm Modal ── */}
+      <AnimatePresence>
+        {clearConfirmOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center px-4"
+            style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 flex flex-col items-center text-center"
+            >
+              <div className="p-4 bg-red-50 rounded-2xl mb-4">
+                <AlertTriangle className="h-8 w-8 text-red-500" />
+              </div>
+              <h2 className="text-xl font-black text-gray-900 mb-2">Limpar Rastreamento?</h2>
+              <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+                Todos os chamados <strong>pendentes e em entrega</strong> serão arquivados.
+                Os dados <strong>permanecem salvos</strong> para os relatórios e o System Analytics.
+              </p>
+              <div className="flex gap-3 w-full">
+                <button
+                  onClick={() => setClearConfirmOpen(false)}
+                  className="flex-1 h-11 rounded-2xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleClearLogistica}
+                  disabled={clearing}
+                  className="flex-1 h-11 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-black transition-colors disabled:opacity-60"
+                >
+                  {clearing ? "Limpando..." : "Sim, Limpar"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
