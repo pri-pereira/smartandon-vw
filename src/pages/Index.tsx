@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { HardHat, Truck, Lock } from "lucide-react";
+import { HardHat, Truck, Lock, HelpCircle } from "lucide-react";
 import { motion } from "framer-motion";
 
 const Index = () => {
@@ -79,6 +79,18 @@ const Index = () => {
             <Lock className="w-4 h-4" />
             <span>Acesso Restrito</span>
           </button>
+
+          {/* Help Center Button */}
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.8 }}
+            onClick={() => navigate("/ajuda")}
+            className="mt-4 flex items-center gap-2 bg-[#001E50]/5 hover:bg-[#001E50]/10 text-[#001E50] font-bold px-6 py-3 rounded-2xl transition-all hover:scale-105 active:scale-95 border border-[#001E50]/10"
+          >
+            <HelpCircle className="w-5 h-5" />
+            <span>Central de Ajuda</span>
+          </motion.button>
         </motion.div>
 
       </main>
