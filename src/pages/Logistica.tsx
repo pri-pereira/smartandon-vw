@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Package, CheckCircle, Clock, AlertTriangle, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getCardColorClasses } from "@/utils/colorMap";
+import { playNewOrderAlert } from "@/utils/alertSound";
 
 interface Chamado {
   id: string;
@@ -78,7 +79,16 @@ const Logistica = () => {
       .channel("logistica-chamados-active")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "chamados" },
+        { event: "INSERT", schema: "public", table: "chamados" },
+        () => {
+          // ── Novo pedido do operador: toca alerta sonoro e atualiza lista ──
+          playNewOrderAlert();
+          fetchActiveChamados();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "chamados" },
         () => fetchActiveChamados()
       )
       .subscribe();
