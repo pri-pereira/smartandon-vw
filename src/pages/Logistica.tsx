@@ -5,10 +5,11 @@ import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Package, CheckCircle, Clock, AlertTriangle, LogOut } from "lucide-react";
+import { Package, CheckCircle, Clock, AlertTriangle, LogOut, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getCardColorClasses } from "@/utils/colorMap";
 import { playNewOrderAlert } from "@/utils/alertSound";
+import OneSignal from "react-onesignal";
 
 interface Chamado {
   id: string;
@@ -32,6 +33,8 @@ const Logistica = () => {
   const [now, setNow] = useState(new Date());
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
   // Authentication check
   useEffect(() => {
@@ -52,6 +55,14 @@ const Logistica = () => {
       }
     });
 
+    // Check OneSignal permission on mount
+    const checkOneSignal = async () => {
+      if (OneSignal.User) {
+        setNotificationsEnabled(OneSignal.Notifications.hasPermission);
+      }
+    };
+    checkOneSignal();
+
     return () => subscription.unsubscribe();
   }, [navigate]);
 
@@ -67,6 +78,38 @@ const Logistica = () => {
       .order("created_at", { ascending: true }); // We will sort manually by urgency anyway
 
     if (data) setChamados(data as Chamado[]);
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchActiveChamados();
+    // Pequeno delay para a animação ficar visível
+    setTimeout(() => {
+      setIsRefreshing(false);
+      toast({
+        title: "Atualizado",
+        description: "A lista de pedidos foi sincronizada.",
+      });
+    }, 500);
+  };
+
+  const handleEnableNotifications = async () => {
+    try {
+      await OneSignal.Notifications.requestPermission();
+      if (OneSignal.Notifications.hasPermission) {
+        setNotificationsEnabled(true);
+        // Associe o Push Notification a este usuário (se baseando no E-mail ou ID do Supabase)
+        if (session?.user?.email) {
+          OneSignal.login(session.user.id); // Set the external_id as User UUID
+        }
+        toast({
+          title: "Notificações Habilitadas",
+          description: "Você receberá alertas em tempo real de novos chamados.",
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao solicitar permissão de push:", error);
+    }
   };
 
   useEffect(() => {
@@ -226,11 +269,43 @@ const Logistica = () => {
                 <p className="text-2xl md:text-3xl font-extrabold text-[#001E50]">{aguardando}</p>
               </div>
             </div>
-            <Button variant="outline" size="icon" onClick={handleLogout} className="h-auto shrink-0 rounded-2xl px-4 py-4 md:py-0 border-gray-200 text-gray-500 hover:text-[#001E50] hover:border-[#001E50] transition-colors md:ml-4 shadow-sm">
-              <LogOut className="h-5 w-5 md:h-6 w-6" />
-            </Button>
+            <div className="flex gap-2 w-full md:w-auto md:ml-4">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="h-auto w-full md:w-auto flex-1 rounded-2xl px-4 py-4 md:py-0 border-gray-200 text-gray-500 hover:text-[#001E50] hover:border-[#001E50] transition-colors shadow-sm"
+              >
+                <RotateCcw className={`h-5 w-5 md:h-6 w-6 ${isRefreshing ? "animate-spin" : ""}`} />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleLogout}
+                className="h-auto w-full md:w-auto flex-1 rounded-2xl px-4 py-4 md:py-0 border-gray-200 text-gray-500 hover:text-red-600 hover:border-red-600 transition-colors shadow-sm"
+              >
+                <LogOut className="h-5 w-5 md:h-6 w-6" />
+              </Button>
+            </div>
           </div>
         </div>
+
+        {/* Notificação Push Prompt Row */}
+        {!notificationsEnabled && (
+          <div className="w-full bg-blue-50 border border-blue-100 p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4 -mt-2">
+            <div className="flex items-center gap-3">
+              <div className="bg-blue-100 p-2 rounded-full"><Package className="h-5 w-5 text-blue-600" /></div>
+              <div>
+                <h3 className="font-bold text-blue-900 text-sm md:text-base">Habilitar Notificações em Tempo Real</h3>
+                <p className="text-blue-700 text-xs md:text-sm">Receba alertas de peças instantaneamente, mesmo com o app minimizado.</p>
+              </div>
+            </div>
+            <Button onClick={handleEnableNotifications} className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-10 w-full md:w-auto">
+              Ativar Alertas
+            </Button>
+          </div>
+        )}
 
         {/* Priority Vertical List */}
         <div className="flex-1 w-full flex flex-col gap-4 mt-2 mb-12">

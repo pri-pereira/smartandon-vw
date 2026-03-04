@@ -1,4 +1,4 @@
-import { Home, Database } from "lucide-react";
+import { Home, Database, Package } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
@@ -44,13 +44,22 @@ const Header = () => {
 
       {/* Renders Admin Button if user is admin, else empty div for flex spacing */}
       {isAdmin ? (
-        <Button
-          onClick={() => navigate("/admin/pecas")}
-          className="bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-sm rounded-xl px-4 h-12 flex items-center gap-2 transition-all active:scale-95"
-        >
-          <Database className="h-4 w-4 md:h-5 md:w-5" />
-          <span className="text-sm md:text-base font-bold hidden md:inline">Admin Peças</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => navigate("/logistica")}
+            className="bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-sm rounded-xl px-4 h-12 flex items-center gap-2 transition-all active:scale-95"
+          >
+            <Package className="h-4 w-4 md:h-5 md:w-5" />
+            <span className="text-sm md:text-base font-bold hidden md:inline">Logística</span>
+          </Button>
+          <Button
+            onClick={() => navigate("/admin/pecas")}
+            className="bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-sm rounded-xl px-4 h-12 flex items-center gap-2 transition-all active:scale-95"
+          >
+            <Database className="h-4 w-4 md:h-5 md:w-5" />
+            <span className="text-sm md:text-base font-bold hidden md:inline">Admin Peças</span>
+          </Button>
+        </div>
       ) : (
         <div className="w-10"></div>
       )}
