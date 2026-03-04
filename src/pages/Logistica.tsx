@@ -55,11 +55,17 @@ const Logistica = () => {
       }
     });
 
-    // Check OneSignal permission on mount
+    // Check OneSignal permission on mount with polling for init
     const checkOneSignal = async () => {
-      if (OneSignal.User) {
-        setNotificationsEnabled(OneSignal.Notifications.hasPermission);
-      }
+      let retries = 0;
+      const interval = setInterval(() => {
+        if (OneSignal.initialized) {
+          setNotificationsEnabled(OneSignal.Notifications.hasPermission);
+          clearInterval(interval);
+        }
+        retries++;
+        if (retries > 20) clearInterval(interval); // give up after 10s
+      }, 500);
     };
     checkOneSignal();
 
@@ -95,20 +101,37 @@ const Logistica = () => {
 
   const handleEnableNotifications = async () => {
     try {
-      await OneSignal.Notifications.requestPermission();
+      if (!OneSignal.initialized) {
+        toast({ title: "Aguarde...", description: "Conectando ao serviço de notificações." });
+        return;
+      }
+
+      await OneSignal.Slidedown.promptPush();
+
       if (OneSignal.Notifications.hasPermission) {
         setNotificationsEnabled(true);
         // Associe o Push Notification a este usuário (se baseando no E-mail ou ID do Supabase)
-        if (session?.user?.email) {
+        if (session?.user?.id) {
           OneSignal.login(session.user.id); // Set the external_id as User UUID
         }
         toast({
           title: "Notificações Habilitadas",
           description: "Você receberá alertas em tempo real de novos chamados.",
         });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Permissão Negada",
+          description: "Você bloqueou as notificações neste navegador. Por favor, libere-as no ícone do cadeado da barra de endereços.",
+        })
       }
     } catch (error) {
       console.error("Erro ao solicitar permissão de push:", error);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Ocorreu um erro ao conectar ao serviço de notificações. Tente recarregar a página."
+      });
     }
   };
 
