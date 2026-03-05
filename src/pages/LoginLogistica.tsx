@@ -20,21 +20,9 @@ const LoginLogistica = () => {
         const checkActiveSession = async () => {
             const { data: { session } } = await supabase.auth.getSession();
             if (session) {
-                // User is already logged in, let's see if they are admin
-                const { data: roles } = await supabase
-                    .from("user_roles")
-                    .select("role")
-                    .eq("user_id", session.user.id)
-                    .eq("role", "admin");
-
-                const hasAdminRole = roles && roles.length > 0;
-                const hasMetadataAdmin = session.user.user_metadata?.role === "admin";
-
-                if (hasAdminRole || hasMetadataAdmin) {
-                    navigate("/relatorios");
-                } else {
-                    navigate("/logistica");
-                }
+                // Ao acessar pelo `/login-logistica`, qualquer usuário autenticado e
+                // associado (incluindo admins) deve ser direcionado para `/logistica`
+                navigate("/logistica");
             }
         };
         checkActiveSession();
@@ -53,21 +41,8 @@ const LoginLogistica = () => {
                     toast({ title: "Erro de autenticação", description: "Email ou senha incorretos.", variant: "destructive" });
                 }
             } else if (data.user) {
-                // Check if user is admin
-                const { data: roles } = await supabase
-                    .from("user_roles")
-                    .select("role")
-                    .eq("user_id", data.user.id)
-                    .eq("role", "admin");
-
-                const hasAdminRole = roles && roles.length > 0;
-                const hasMetadataAdmin = data.user.user_metadata?.role === "admin";
-
-                if (hasAdminRole || hasMetadataAdmin) {
-                    navigate("/relatorios");
-                } else {
-                    navigate("/logistica");
-                }
+                // Independentemente se é admin ou não, o login por aqui deve direcionar para logística
+                navigate("/logistica");
             }
         } else if (mode === "register") {
             const { error } = await supabase.auth.signUp({ email, password });

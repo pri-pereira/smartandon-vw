@@ -167,6 +167,8 @@ const Relatorios = () => {
   const avgClose = avg(closeTimes);
   const avgLeadTime = avg(leadTimes);
 
+  const divergencias = chamados.filter((c) => c.status === "divergencia");
+
   // Chart 1: Volume + Lead Time by hour
   const hourMap = new Map<string, { hour: string; requests: number; totalLead: number; validLead: number }>();
   for (let i = 6; i <= 23; i++) {
@@ -302,28 +304,29 @@ const Relatorios = () => {
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
             { label: "Tempo de Reação", value: fmt(avgReaction), sub: "Solicitação → Logística", icon: <Zap className="h-6 w-6" />, bg: "bg-blue-50", color: "text-blue-600", delay: 0.1 },
             { label: "Tempo de Fechamento", value: fmt(avgClose), sub: "Logística → Confirmação", icon: <Clock className="h-6 w-6" />, bg: "bg-indigo-50", color: "text-indigo-600", delay: 0.2 },
+            { label: "Divergências", value: divergencias.length.toString(), sub: "Peças não recebidas", icon: <AlertTriangle className="h-6 w-6" />, bg: "bg-red-50", color: "text-red-600", delay: 0.25 },
           ].map((kpi) => (
             <motion.div
               key={kpi.label}
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: kpi.delay }}
-              className="bg-white rounded-3xl p-8 border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
+              className="bg-white rounded-3xl p-6 lg:p-8 border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
             >
               <div className="flex items-center gap-3 mb-4">
                 <div className={`p-3 ${kpi.bg} ${kpi.color} rounded-2xl`}>{kpi.icon}</div>
-                <h2 className="text-gray-500 font-bold tracking-widest text-sm uppercase">{kpi.label}</h2>
+                <h2 className="text-gray-500 font-bold tracking-widest text-xs xl:text-sm uppercase whitespace-nowrap">{kpi.label}</h2>
               </div>
-              <span className="text-4xl md:text-5xl font-black text-[#001E50] tracking-tighter">{kpi.value}</span>
+              <span className="text-3xl xl:text-5xl font-black text-[#001E50] tracking-tighter">{kpi.value}</span>
               <p className="text-xs text-gray-400 mt-2 font-medium">{kpi.sub}</p>
             </motion.div>
           ))}
 
           <motion.div
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-            className="bg-[#001E50] rounded-3xl p-8 shadow-[0_8px_30px_rgba(0,30,80,0.2)] text-white relative overflow-hidden"
+            className="bg-[#001E50] rounded-3xl p-6 lg:p-8 shadow-[0_8px_30px_rgba(0,30,80,0.2)] text-white relative overflow-hidden"
           >
             <div className="absolute top-0 right-0 p-8 opacity-10"><Activity className="h-32 w-32" /></div>
             <div className="flex items-center gap-3 mb-4 relative z-10">
@@ -378,32 +381,75 @@ const Relatorios = () => {
           </motion.div>
         </div>
 
-        {/* Chart row 2: Top 5 Tactos */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.6 }}
-          className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
-        >
-          <div className="flex items-start justify-between mb-6 flex-wrap gap-2">
-            <div>
-              <h3 className="text-xl font-black text-[#001E50]">Top 5 Tactos com Mais Chamados</h3>
-              <p className="text-sm text-gray-400 font-medium mt-0.5">Identificação de gargalos na linha de montagem</p>
+        {/* Chart row 2: Top 5 Tactos e Divergências */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.6 }}
+            className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
+          >
+            <div className="flex items-start justify-between mb-6 flex-wrap gap-2">
+              <div>
+                <h3 className="text-xl font-black text-[#001E50]">Top 5 Tactos com Mais Chamados</h3>
+                <p className="text-sm text-gray-400 font-medium mt-0.5">Identificação de gargalos na linha de montagem</p>
+              </div>
+              {top5Tactos.length === 0 && <span className="text-xs text-gray-300 font-medium">Sem dados no período</span>}
             </div>
-            {top5Tactos.length === 0 && <span className="text-xs text-gray-300 font-medium">Sem dados no período</span>}
-          </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={top5Tactos} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E5E7EB" />
-                <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontWeight: 'bold', fontSize: 12 }} />
-                <YAxis dataKey="tacto" type="category" axisLine={false} tickLine={false} tick={{ fill: '#001E50', fontWeight: 'black', fontSize: 13 }} width={50} />
-                <Tooltip cursor={{ fill: '#F3F4F6' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', fontWeight: 'bold', color: '#001E50' }} />
-                <Bar dataKey="chamados" radius={[0, 6, 6, 0]} animationDuration={1500}>
-                  {top5Tactos.map((_, i) => <Cell key={i} fill={TOP5_COLORS[i] || "#001E50"} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={top5Tactos} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E5E7EB" />
+                  <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontWeight: 'bold', fontSize: 12 }} />
+                  <YAxis dataKey="tacto" type="category" axisLine={false} tickLine={false} tick={{ fill: '#001E50', fontWeight: 'black', fontSize: 13 }} width={50} />
+                  <Tooltip cursor={{ fill: '#F3F4F6' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', fontWeight: 'bold', color: '#001E50' }} />
+                  <Bar dataKey="chamados" radius={[0, 6, 6, 0]} animationDuration={1500}>
+                    {top5Tactos.map((_, i) => <Cell key={i} fill={TOP5_COLORS[i] || "#001E50"} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </motion.div>
+
+          {/* Divergências List */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.7 }}
+            className="bg-white p-6 md:p-8 rounded-3xl border border-red-100 shadow-[0_8px_30px_rgb(239,68,68,0.08)] flex flex-col h-full"
+          >
+            <div className="flex items-start justify-between mb-6 flex-wrap gap-2">
+              <div>
+                <h3 className="text-xl font-black text-red-600 flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5" />
+                  Ocorrências de Divergência
+                </h3>
+                <p className="text-sm text-gray-400 font-medium mt-0.5">Peças declaradas como não recebidas na célula</p>
+              </div>
+              <span className="px-3 py-1 bg-red-100 text-red-700 font-black rounded-lg text-sm">
+                {divergencias.length} Total
+              </span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-2 max-h-64 space-y-3 custom-scrollbar">
+              {divergencias.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-green-500 opacity-60">
+                  <Zap className="h-10 w-10 mb-2" />
+                  <p className="font-bold">Nenhuma divergência registrada!</p>
+                </div>
+              ) : (
+                divergencias.map((div, idx) => (
+                  <div key={div.id || idx} className="bg-red-50/50 border border-red-100 p-4 rounded-2xl flex items-center justify-between gap-4">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-red-400 uppercase tracking-widest">TACTO {div.tacto}</span>
+                      <span className="text-red-900 font-black text-sm">{format(parseISO(div.created_at), "dd/MM/yyyy HH:mm:ss")}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-red-400 uppercase font-bold block">Status</span>
+                      <span className="bg-red-200 text-red-800 text-xs font-black px-2 py-0.5 rounded-md">DIVERGÊNCIA</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </motion.div>
+        </div>
 
       </main>
 

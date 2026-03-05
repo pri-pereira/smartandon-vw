@@ -106,31 +106,38 @@ const Logistica = () => {
         return;
       }
 
+      // No OneSignal react-onesignal v3, promptPush() não resolve com booleano em todos os browsers.
+      // O melhor é escutar o evento ou apenas aguardar e checar o hasPermission atualizado.
       await OneSignal.Slidedown.promptPush();
 
-      if (OneSignal.Notifications.hasPermission) {
-        setNotificationsEnabled(true);
-        // Associe o Push Notification a este usuário (se baseando no E-mail ou ID do Supabase)
-        if (session?.user?.id) {
-          OneSignal.login(session.user.id); // Set the external_id as User UUID
+      // Vamos checar agora se a permissão foi concedida.
+      // Algumas vezes o OneSignal demora uns ms para atualizar o objeto local
+      setTimeout(() => {
+        if (OneSignal.Notifications.hasPermission) {
+          setNotificationsEnabled(true);
+          // Associe o Push Notification a este usuário
+          if (session?.user?.id) {
+            OneSignal.login(session.user.id);
+          }
+          toast({
+            title: "Tudo certo! 🎉",
+            description: "Você receberá alertas em tempo real de novos chamados.",
+          });
+        } else {
+          toast({
+            variant: "destructive",
+            title: "Permissão Pendente ou Negada",
+            description: "Não foi possível confirmar a permissão. Verifique no ícone do cadeado da barra de endereços.",
+          });
         }
-        toast({
-          title: "Notificações Habilitadas",
-          description: "Você receberá alertas em tempo real de novos chamados.",
-        });
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Permissão Negada",
-          description: "Você bloqueou as notificações neste navegador. Por favor, libere-as no ícone do cadeado da barra de endereços.",
-        })
-      }
+      }, 500);
+
     } catch (error) {
       console.error("Erro ao solicitar permissão de push:", error);
       toast({
         variant: "destructive",
         title: "Erro",
-        description: "Ocorreu um erro ao conectar ao serviço de notificações. Tente recarregar a página."
+        description: "Ocorreu um erro ao conectar. Tente recarregar a página."
       });
     }
   };
