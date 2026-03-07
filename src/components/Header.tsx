@@ -8,6 +8,7 @@ const Header = () => {
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
   const [userName, setUserName] = useState("");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     const checkAdmin = async () => {
@@ -22,9 +23,10 @@ const Header = () => {
         const hasAdminRole = roles && roles.length > 0;
         const hasMetadataAdmin = user.user_metadata?.role === "admin";
         setIsAdmin(hasAdminRole || hasMetadataAdmin);
+        setIsLoggedIn(true);
 
         // Captura o primeiro nome do usuário
-        const fullName: string = user.user_metadata?.full_name || user.email || "";
+        const fullName: string = user.user_metadata?.full_name || "";
         const firstName = fullName.trim().split(" ")[0];
         setUserName(firstName);
       }
@@ -45,11 +47,11 @@ const Header = () => {
         <span className="text-lg md:text-xl font-bold text-primary-foreground tracking-wide leading-tight">
           SMARTANDON
         </span>
-        {userName ? (
+        {isLoggedIn && (
           <span className="text-[11px] text-white/70 font-medium tracking-wide leading-none">
-            Bem vindo! {userName}
+            {userName ? `Bem vindo! ${userName}` : "Bem-vindo ao SmartAndon VW"}
           </span>
-        ) : null}
+        )}
       </button>
 
       {/* Renders Admin Button if user is admin, else empty div for flex spacing */}
