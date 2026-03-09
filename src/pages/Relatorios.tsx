@@ -9,7 +9,7 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
-import { LogOut, Calendar, Activity, Clock, Zap, ChevronRight, Trash2, FileDown, AlertTriangle } from "lucide-react";
+import { LogOut, Calendar, Activity, Clock, Zap, ChevronRight, Trash2, FileDown, AlertTriangle, Monitor } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Chamado {
@@ -280,6 +280,14 @@ const Relatorios = () => {
             <p className="text-sm text-gray-300 font-medium">{chamados.length} chamado{chamados.length !== 1 ? "s" : ""} no período</p>
           </div>
           <div className="flex flex-wrap gap-3 w-full md:w-auto">
+            {/* Voltar para o Painel de Logística */}
+            <button
+              onClick={() => navigate("/logistica")}
+              className="flex items-center gap-2 h-11 px-4 rounded-2xl bg-[#001E50] hover:bg-[#002a6e] text-white font-bold border border-[#001E50] transition-colors text-sm"
+            >
+              <Monitor className="h-4 w-4" />
+              Monitoramento em Tempo Real
+            </button>
             {/* Limpar tela da logística */}
             <button
               onClick={() => setClearConfirmOpen(true)}
