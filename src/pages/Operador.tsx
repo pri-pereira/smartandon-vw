@@ -183,18 +183,18 @@ const Operador = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FFFFFF] font-sans selection:bg-[#001E50] selection:text-white pb-10 overflow-x-hidden">
+    <div className="min-h-screen flex flex-col bg-[#FFFFFF] font-sans selection:bg-[#001E50] selection:text-white pb-6 overflow-x-hidden">
       <Header />
-      <main className="flex-1 w-full max-w-2xl mx-auto flex flex-col items-center px-6 mt-6 md:mt-12 gap-8">
+      <main className="flex-1 w-full max-w-2xl mx-auto flex flex-col items-center px-4 sm:px-6 mt-4 md:mt-8 gap-4 sm:gap-6">
 
         {step === "tacto" && (
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="w-full flex flex-col items-center gap-8"
+            className="w-full flex flex-col items-center gap-4 sm:gap-6"
           >
             <div className="w-full text-center max-w-lg">
-              <h2 className="text-xl md:text-2xl font-bold text-[#001E50] mb-6">SELECIONE O LADO</h2>
+              <h2 className="text-lg md:text-xl font-bold text-[#001E50] mb-3 sm:mb-4">SELECIONE O LADO</h2>
               {/* Segmented Control for Lado */}
               <div className="flex bg-slate-100 rounded-3xl p-1.5 w-full mx-auto shadow-sm">
                 <button
@@ -218,10 +218,10 @@ const Operador = () => {
               </div>
             </div>
 
-            <div className="w-full text-center mt-2 max-w-lg">
-              <h2 className="text-xl md:text-2xl font-bold text-[#001E50] mb-6">INFORME O TACTO</h2>
-              <div className={`w-full bg-slate-50 rounded-3xl py-6 text-center border-2 transition-colors shadow-sm ${tactoError ? "border-red-500 bg-red-50 focus-within:border-red-600" : "border-transparent focus-within:border-[#001E50]"}`}>
-                <span className={`text-5xl font-mono font-bold tracking-widest ${tactoError ? "text-red-500" : "text-[#001E50]"}`}>
+            <div className="w-full text-center mt-1 sm:mt-2 max-w-lg">
+              <h2 className="text-lg md:text-xl font-bold text-[#001E50] mb-3 sm:mb-4">INFORME O TACTO</h2>
+              <div className={`w-full bg-slate-50 rounded-3xl py-4 sm:py-6 text-center border-2 transition-colors shadow-sm ${tactoError ? "border-red-500 bg-red-50 focus-within:border-red-600" : "border-transparent focus-within:border-[#001E50]"}`}>
+                <span className={`text-4xl sm:text-5xl font-mono font-bold tracking-widest ${tactoError ? "text-red-500" : "text-[#001E50]"}`}>
                   {tacto || "---"}
                 </span>
               </div>
@@ -245,7 +245,7 @@ const Operador = () => {
               </div>
             </div>
 
-            <div className="w-full max-w-lg transform scale-100 md:scale-125 origin-top mt-2 mb-4 md:mb-24">
+            <div className="w-full max-w-lg transform scale-[0.85] sm:scale-100 origin-top -mt-2 sm:-mt-0 mb-2 sm:mb-8">
               <NumericKeypad value={tacto} onChange={setTacto} maxLength={5} />
             </div>
 

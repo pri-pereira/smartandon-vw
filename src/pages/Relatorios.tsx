@@ -480,7 +480,7 @@ const Relatorios = () => {
           </motion.div>
         </div>
 
-        {/* Dashboard de Perdas por Qualidade Logística (Pareto + Downtime) */}
+        {/* Dashboard de Confiabilidade da Cadeia de Suprimentos (Pareto + Downtime) */}
         {(() => {
           // Agrupa por motivo, dividido por lado
           const motivoMap: Record<string, { motivo: string; shortMotivo: string; LE: number; LD: number; total: number; totalDowntimeSeg: number }> = {};
@@ -522,9 +522,9 @@ const Relatorios = () => {
             >
               <div className="flex items-start justify-between mb-6 flex-wrap gap-2">
                 <div>
-                  <h3 className="text-xl font-black text-[#001E50] flex items-center gap-2">
+                  <h3 className="text-lg md:text-xl font-black text-[#001E50] flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-orange-500" />
-                    Dashboard de Perdas por Qualidade
+                    Dashboard de Confiabilidade da Cadeia de Suprimentos
                   </h3>
                   <p className="text-sm text-gray-400 font-medium mt-0.5">Métrica de Downtime por Frequência de Erros — Período: {rangeLabel}</p>
                 </div>
