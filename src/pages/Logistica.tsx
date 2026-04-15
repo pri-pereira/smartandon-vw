@@ -32,11 +32,14 @@ interface NaoConformidade {
   tacto: string;
   lado: string;
   created_at: string;
+  resolved_at: string | null;
 }
 
 const Logistica = () => {
   const [chamados, setChamados] = useState<Chamado[]>([]);
   const [naoConformidades, setNaoConformidades] = useState<NaoConformidade[]>([]);
+  const [resolvingMotivo, setResolvingMotivo] = useState<string | null>(null);
+  const [isResolving, setIsResolving] = useState(false);
   const [session, setSession] = useState<any>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [now, setNow] = useState(new Date());
@@ -160,7 +163,7 @@ const Logistica = () => {
     const oitoHorasAtras = new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString();
     const { data } = await supabase
       .from("nao_conformidades")
-      .select("id, motivo, tacto, lado, created_at")
+      .select("id, motivo, tacto, lado, created_at, resolved_at")
       .gte("created_at", oitoHorasAtras)
       .order("created_at", { ascending: false });
     if (data) setNaoConformidades(data as NaoConformidade[]);
@@ -248,6 +251,27 @@ const Logistica = () => {
     });
   };
 
+  const handleResolveReincidencia = async (motivo: string) => {
+    setIsResolving(true);
+    const idsToResolve = naoConformidades
+      .filter(nc => nc.motivo === motivo && !nc.resolved_at)
+      .map(nc => nc.id);
+
+    if (idsToResolve.length > 0) {
+      await supabase
+        .from("nao_conformidades")
+        .update({ resolved_at: getSaoPauloTimestamp() })
+        .in("id", idsToResolve);
+    }
+    
+    setResolvingMotivo(null);
+    setIsResolving(false);
+    toast({
+      title: "Resolvido",
+      description: "As reincidências foram validadas e removidas do alerta.",
+    });
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/");
@@ -310,34 +334,41 @@ const Logistica = () => {
 
         {/* ── Banner de Reincidência ── */}
         {(() => {
-          // Agrupar por motivo e verificar se algum >= 3 ocorrências no turno
+          // Agrupar por motivo e verificar se algum >= 3 ocorrências ativas (nulas) no turno
           const motivoCounts: Record<string, number> = {};
           naoConformidades.forEach(nc => {
-            motivoCounts[nc.motivo] = (motivoCounts[nc.motivo] || 0) + 1;
+            if (!nc.resolved_at) {
+              motivoCounts[nc.motivo] = (motivoCounts[nc.motivo] || 0) + 1;
+            }
           });
           const reincidentes = Object.entries(motivoCounts).filter(([, count]) => count >= 3);
           if (reincidentes.length === 0) return null;
           return (
             <AnimatePresence>
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="w-full bg-red-600 text-white rounded-2xl p-4 flex items-start gap-3 shadow-lg animate-pulse"
-              >
-                <div className="p-2 bg-white/20 rounded-xl shrink-0">
-                  <Siren className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="font-black text-sm uppercase tracking-wider">
-                    ⚠ ALERTA DE REINCIDÊNCIA
-                  </p>
-                  {reincidentes.map(([motivo, count]) => (
-                    <p key={motivo} className="text-xs font-bold opacity-90 mt-0.5">
-                      "{motivo}" registrado {count}× neste turno — Possível falha de conferência no recebimento ou carregamento.
+              {reincidentes.map(([motivo, count]) => (
+                <motion.button
+                  key={motivo}
+                  onClick={() => setResolvingMotivo(motivo)}
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: [1, 0.7, 1], y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white rounded-2xl p-4 flex items-start gap-4 shadow-lg text-left transition-colors mb-4 group ring-4 ring-transparent hover:ring-red-300"
+                >
+                  <div className="p-2 bg-white/20 rounded-xl shrink-0 group-hover:bg-white/30 transition-colors">
+                    <Siren className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="font-black text-sm uppercase tracking-wider mb-1 shadow-sm">
+                      ⚠ ALERTA DE REINCIDÊNCIA
                     </p>
-                  ))}
-                </div>
-              </motion.div>
+                    <p className="text-sm font-bold opacity-90 leading-snug">
+                      "{motivo}" não resolvido reincidiu {count}× neste turno. <br/>
+                      <span className="font-black text-white underline decoration-red-300 mt-1 inline-block">Clique aqui para duplo-check de resolução</span>
+                    </p>
+                  </div>
+                </motion.button>
+              ))}
             </AnimatePresence>
           );
         })()}
@@ -521,7 +552,49 @@ const Logistica = () => {
           )}
         </div>
       </main >
-    </div >
+      {/* ── Resolve Reincidência Confirm Modal ── */}
+      <AnimatePresence>
+        {resolvingMotivo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center px-4"
+            style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 flex flex-col items-center text-center"
+            >
+              <div className="p-4 bg-red-50 rounded-xl mb-4 text-red-600">
+                <CheckCircle className="h-8 w-8" />
+              </div>
+              <h2 className="text-xl font-black text-gray-900 mb-2">Validar Resolução?</h2>
+              <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+                Você confirma (duplo-check) que as divergências de <strong>"{resolvingMotivo}"</strong> foram tratadas e não ocorrem mais na linha?
+              </p>
+              <div className="flex gap-3 w-full">
+                <button
+                  onClick={() => setResolvingMotivo(null)}
+                  className="flex-1 h-11 rounded-2xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => handleResolveReincidencia(resolvingMotivo)}
+                  disabled={isResolving}
+                  className="flex-1 h-11 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-black transition-colors disabled:opacity-60"
+                >
+                  {isResolving ? "Validando..." : "Sim, Confirmar"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 };
 
