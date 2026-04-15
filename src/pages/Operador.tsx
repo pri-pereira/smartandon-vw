@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { getCardColorClasses } from "@/utils/colorMap";
 import { getTerminalId, saveActiveChamadoId } from "@/utils/terminalId";
 import ConfirmacaoFAB from "@/components/ConfirmacaoFAB";
+import MaterialNaoConformeModal from "@/components/MaterialNaoConformeModal";
 
 type Step = "tacto" | "peca" | "success";
 type Lado = "LE" | "LD" | null;
@@ -34,6 +35,7 @@ const Operador = () => {
   const [catalogoPecas, setCatalogoPecas] = useState<PecaItem[]>([]);
   const [tactoError, setTactoError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
+  const [naoConformeOpen, setNaoConformeOpen] = useState(false);
   const { toast } = useToast();
 
   // Load parts and validate Poka-Yoke when Tacto or Lado changes
@@ -247,6 +249,17 @@ const Operador = () => {
               <NumericKeypad value={tacto} onChange={setTacto} maxLength={5} />
             </div>
 
+            {/* Botão Material Não Conforme */}
+            <div className="w-full max-w-lg">
+              <button
+                onClick={() => setNaoConformeOpen(true)}
+                className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-2xl border-2 border-orange-300 bg-orange-50 hover:bg-orange-100 hover:border-orange-400 text-orange-700 font-black text-base transition-all active:scale-95 shadow-sm"
+              >
+                <AlertTriangle className="h-5 w-5 text-orange-500" />
+                Material não conforme
+              </button>
+            </div>
+
             <div className="flex gap-4 w-full max-w-lg">
               <Button
                 variant="outline"
@@ -338,6 +351,14 @@ const Operador = () => {
 
       {/* ── Double Check FAB: aparece quando a logística sinaliza entrega ── */}
       <ConfirmacaoFAB />
+
+      {/* ── Modal: Material Não Conforme ── */}
+      <MaterialNaoConformeModal
+        isOpen={naoConformeOpen}
+        onClose={() => setNaoConformeOpen(false)}
+        tactoInicial={tacto}
+        ladoInicial={lado}
+      />
     </div>
   );
 };

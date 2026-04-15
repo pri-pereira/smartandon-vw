@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Cell,
+  Tooltip, ResponsiveContainer, Cell, Legend, ComposedChart
 } from "recharts";
-import { LogOut, Calendar, Activity, Clock, Zap, ChevronRight, Trash2, FileDown, AlertTriangle, Monitor } from "lucide-react";
+import { LogOut, Calendar, Activity, Clock, Zap, ChevronRight, Trash2, FileDown, AlertTriangle, Monitor, CheckCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Chamado {
@@ -21,11 +21,22 @@ interface Chamado {
   status: string;
 }
 
+interface NaoConformidade {
+  id: string;
+  tacto: string;
+  lado: string;
+  motivo: string;
+  status: string;
+  created_at: string;
+  resolved_at: string | null;
+}
+
 const Relatorios = () => {
   const today = format(new Date(), "yyyy-MM-dd");
   const [dateFrom, setDateFrom] = useState(today);
   const [dateTo, setDateTo] = useState(today);
   const [chamados, setChamados] = useState<Chamado[]>([]);
+  const [naoConformidades, setNaoConformidades] = useState<NaoConformidade[]>([]);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -59,15 +70,24 @@ const Relatorios = () => {
   useEffect(() => {
     if (loading) return;
     const fetchRange = async () => {
-      const { data } = await supabase
-        .from("chamados")
-        // ── Apenas as colunas usadas pelos KPIs e gráficos ──
-        .select("id, tacto, created_at, entregue_at, confirmado_at, status")
-        .gte("created_at", `${dateFrom}T00:00:00`)
-        .lte("created_at", `${dateTo}T23:59:59`)
-        .order("created_at", { ascending: true })
-        .limit(500); // segurança: máx 500 registros por consulta
-      if (data) setChamados(data as Chamado[]);
+      const [chamadosRes, naoConformidadesRes] = await Promise.all([
+        supabase
+          .from("chamados")
+          .select("id, tacto, created_at, entregue_at, confirmado_at, status")
+          .gte("created_at", `${dateFrom}T00:00:00`)
+          .lte("created_at", `${dateTo}T23:59:59`)
+          .order("created_at", { ascending: true })
+          .limit(500),
+        supabase
+          .from("nao_conformidades")
+          .select("id, tacto, lado, motivo, status, created_at, resolved_at")
+          .gte("created_at", `${dateFrom}T00:00:00`)
+          .lte("created_at", `${dateTo}T23:59:59`)
+          .order("created_at", { ascending: true })
+          .limit(500),
+      ]);
+      if (chamadosRes.data) setChamados(chamadosRes.data as Chamado[]);
+      if (naoConformidadesRes.data) setNaoConformidades(naoConformidadesRes.data as NaoConformidade[]);
     };
     fetchRange();
   }, [dateFrom, dateTo, loading]);
@@ -314,9 +334,10 @@ const Relatorios = () => {
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
-            { label: "Tempo de Reação", value: fmt(avgReaction), sub: "Solicitação → Logística", icon: <Zap className="h-6 w-6" />, bg: "bg-blue-50", color: "text-blue-600", delay: 0.1 },
+          { label: "Tempo de Reação", value: fmt(avgReaction), sub: "Solicitação → Logística", icon: <Zap className="h-6 w-6" />, bg: "bg-blue-50", color: "text-blue-600", delay: 0.1 },
             { label: "Tempo de Fechamento", value: fmt(avgClose), sub: "Logística → Confirmação", icon: <Clock className="h-6 w-6" />, bg: "bg-indigo-50", color: "text-indigo-600", delay: 0.2 },
             { label: "Divergências", value: divergencias.length.toString(), sub: "Peças não recebidas", icon: <AlertTriangle className="h-6 w-6" />, bg: "bg-red-50", color: "text-red-600", delay: 0.25 },
+            { label: "Não Conformidades", value: naoConformidades.length.toString(), sub: "Registros de qualidade", icon: <AlertTriangle className="h-6 w-6" />, bg: "bg-orange-50", color: "text-orange-500", delay: 0.3 },
           ].map((kpi) => (
             <motion.div
               key={kpi.label}
@@ -458,6 +479,121 @@ const Relatorios = () => {
             </div>
           </motion.div>
         </div>
+
+        {/* Dashboard de Perdas por Qualidade Logística (Pareto + Downtime) */}
+        {(() => {
+          // Agrupa por motivo, dividido por lado
+          const motivoMap: Record<string, { motivo: string; shortMotivo: string; LE: number; LD: number; total: number; totalDowntimeSeg: number }> = {};
+          naoConformidades.forEach(nc => {
+            if (!motivoMap[nc.motivo]) {
+              // Nome mais curto para o eixo X
+              let shortMotivo = nc.motivo;
+              if (nc.motivo.includes("Posicionamento")) shortMotivo = "Posicionamento Rack";
+              if (nc.motivo.includes("Divergência")) shortMotivo = "Divergência Lado";
+
+              motivoMap[nc.motivo] = { motivo: nc.motivo, shortMotivo, LE: 0, LD: 0, total: 0, totalDowntimeSeg: 0 };
+            }
+            if (nc.lado === "LE") motivoMap[nc.motivo].LE++;
+            else if (nc.lado === "LD") motivoMap[nc.motivo].LD++;
+            motivoMap[nc.motivo].total++;
+
+            // Métrica de Downtime Estimado: se resolved_at existe usa getDiff, senão estimativa
+            let sec = 0;
+            if (nc.resolved_at) {
+              const diff = getDiff(nc.created_at, nc.resolved_at);
+              if (diff && diff > 0) sec = diff;
+            } else {
+              if (nc.motivo.includes("Posicionamento")) sec = 15 * 60; // 15 min estimado
+              else if (nc.motivo.includes("Divergência")) sec = 35 * 60; // 35 min estimado
+              else sec = 20 * 60;
+            }
+            motivoMap[nc.motivo].totalDowntimeSeg += sec;
+          });
+
+          const paretoData = Object.values(motivoMap).map(d => ({
+            ...d,
+            averageDowntime: Math.round((d.totalDowntimeSeg / d.total) / 60) || 0 // Média em minutos
+          })).sort((a, b) => b.total - a.total);
+
+          return (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.75 }}
+              className="bg-white p-6 md:p-8 rounded-3xl border border-orange-100 shadow-[0_8px_30px_rgba(249,115,22,0.08)]"
+            >
+              <div className="flex items-start justify-between mb-6 flex-wrap gap-2">
+                <div>
+                  <h3 className="text-xl font-black text-[#001E50] flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-orange-500" />
+                    Dashboard de Perdas por Qualidade
+                  </h3>
+                  <p className="text-sm text-gray-400 font-medium mt-0.5">Métrica de Downtime por Frequência de Erros — Período: {rangeLabel}</p>
+                </div>
+                <span className="px-3 py-1 bg-orange-100 text-orange-700 font-black rounded-lg text-sm">
+                  {naoConformidades.length} Ocorrências
+                </span>
+              </div>
+              {naoConformidades.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-48 text-green-500 opacity-60">
+                  <CheckCircle className="h-10 w-10 mb-2" />
+                  <p className="font-bold">Nenhuma não conformidade no período!</p>
+                </div>
+              ) : (
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={paretoData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                      <XAxis
+                        dataKey="shortMotivo"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#374151', fontWeight: 'bold', fontSize: 11 }}
+                        dy={10}
+                      />
+                      <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontWeight: 'bold', fontSize: 11 }} allowDecimals={false} />
+                      <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fill: '#EF4444', fontWeight: 'bold', fontSize: 11 }} />
+                      <Tooltip
+                        cursor={{ fill: '#FFF7ED' }}
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', fontWeight: 'bold', color: '#001E50' }}
+                        formatter={(value: number, name: string) => {
+                          if (name === 'LE') return [value, 'Lado Esquerdo (LE)'];
+                          if (name === 'LD') return [value, 'Lado Direito (LD)'];
+                          if (name === 'averageDowntime') return [`${value} min`, 'Downtime Médio'];
+                          return [value, name];
+                        }}
+                      />
+                      <Legend
+                        formatter={(value) => {
+                          if (value === 'LE') return 'Esquerdo (LE)';
+                          if (value === 'LD') return 'Direito (LD)';
+                          if (value === 'averageDowntime') return 'Downtime Médio (min)';
+                          return value;
+                        }}
+                        wrapperStyle={{ paddingTop: '8px', fontWeight: 'bold', fontSize: 12 }}
+                      />
+                      <Bar yAxisId="left" dataKey="LE" stackId="a" fill="#3B82F6" radius={[0, 0, 0, 0]} name="LE" animationDuration={1500} />
+                      <Bar yAxisId="left" dataKey="LD" stackId="a" fill="#F97316" radius={[6, 6, 0, 0]} name="LD" animationDuration={1500} />
+                      <Line yAxisId="right" type="monotone" dataKey="averageDowntime" name="averageDowntime" stroke="#EF4444" strokeWidth={3} dot={{ strokeWidth: 2, r: 4, fill: '#EF4444' }} animationDuration={2000} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+              {/* Insight cards */}
+              {naoConformidades.length > 0 && (
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  {[
+                    { label: 'Lado Esquerdo (LE)', count: naoConformidades.filter(n => n.lado === 'LE').length, color: 'bg-blue-50 text-blue-700 border-blue-100' },
+                    { label: 'Lado Direito (LD)', count: naoConformidades.filter(n => n.lado === 'LD').length, color: 'bg-orange-50 text-orange-700 border-orange-100' },
+                  ].map(item => (
+                    <div key={item.label} className={`${item.color} border rounded-2xl p-3 text-center`}>
+                      <p className="text-2xl font-black">{item.count}</p>
+                      <p className="text-xs font-bold uppercase tracking-wide mt-0.5 opacity-70">{item.label}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          );
+        })()}
 
       </main>
 

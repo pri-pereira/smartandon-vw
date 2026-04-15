@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Package, CheckCircle, Clock, AlertTriangle, LogOut, RotateCcw } from "lucide-react";
+import { Package, CheckCircle, Clock, AlertTriangle, LogOut, RotateCcw, Siren } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getCardColorClasses } from "@/utils/colorMap";
 import { playNewOrderAlert } from "@/utils/alertSound";
@@ -26,8 +26,17 @@ interface Chamado {
   rack_location: string;
 }
 
+interface NaoConformidade {
+  id: string;
+  motivo: string;
+  tacto: string;
+  lado: string;
+  created_at: string;
+}
+
 const Logistica = () => {
   const [chamados, setChamados] = useState<Chamado[]>([]);
+  const [naoConformidades, setNaoConformidades] = useState<NaoConformidade[]>([]);
   const [session, setSession] = useState<any>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [now, setNow] = useState(new Date());
@@ -144,6 +153,34 @@ const Logistica = () => {
 
   useEffect(() => {
     fetchActiveChamados();
+  }, []);
+
+  // Buscar não conformidades do turno (últimas 8h)
+  const fetchNaoConformidadesTurno = async () => {
+    const oitoHorasAtras = new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString();
+    const { data } = await supabase
+      .from("nao_conformidades")
+      .select("id, motivo, tacto, lado, created_at")
+      .gte("created_at", oitoHorasAtras)
+      .order("created_at", { ascending: false });
+    if (data) setNaoConformidades(data as NaoConformidade[]);
+  };
+
+  useEffect(() => {
+    fetchNaoConformidadesTurno();
+  }, []);
+
+  // Realtime: atualizar alerta de reincidência ao vivo
+  useEffect(() => {
+    const channel = supabase
+      .channel("logistica-nao-conformidades")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "nao_conformidades" },
+        () => fetchNaoConformidadesTurno()
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   // Realtime subscription for chamados
@@ -270,6 +307,40 @@ const Logistica = () => {
     <div className="min-h-screen flex flex-col bg-[#F4F4F5] font-sans selection:bg-[#001E50] selection:text-white">
       <Header />
       <main className="flex-1 w-full max-w-5xl mx-auto flex flex-col px-4 md:px-6 py-6 gap-6">
+
+        {/* ── Banner de Reincidência ── */}
+        {(() => {
+          // Agrupar por motivo e verificar se algum >= 3 ocorrências no turno
+          const motivoCounts: Record<string, number> = {};
+          naoConformidades.forEach(nc => {
+            motivoCounts[nc.motivo] = (motivoCounts[nc.motivo] || 0) + 1;
+          });
+          const reincidentes = Object.entries(motivoCounts).filter(([, count]) => count >= 3);
+          if (reincidentes.length === 0) return null;
+          return (
+            <AnimatePresence>
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full bg-red-600 text-white rounded-2xl p-4 flex items-start gap-3 shadow-lg animate-pulse"
+              >
+                <div className="p-2 bg-white/20 rounded-xl shrink-0">
+                  <Siren className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-black text-sm uppercase tracking-wider">
+                    ⚠ ALERTA DE REINCIDÊNCIA
+                  </p>
+                  {reincidentes.map(([motivo, count]) => (
+                    <p key={motivo} className="text-xs font-bold opacity-90 mt-0.5">
+                      "{motivo}" registrado {count}× neste turno — Possível falha de conferência no recebimento ou carregamento.
+                    </p>
+                  ))}
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          );
+        })()}
 
         {/* Superior Dashboard Bar */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b pb-6">
