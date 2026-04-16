@@ -46,7 +46,7 @@ export const useRealtimeOrders = () => {
                     .from("chamados")
                     .select("id, nome_peca, codigo_peca, tacto, lado, cor_peca, terminal_id")
                     .eq("id", savedChamadoId)
-                    .eq("status", "entregue_no_posto")
+                    .in("status", ["entregue_no_posto", "aguardando_confirmacao", "aguardando_validacao_operador"])
                     .maybeSingle();
 
                 if (data) {
@@ -64,7 +64,7 @@ export const useRealtimeOrders = () => {
                 const { data } = await supabase
                     .from("chamados")
                     .select("id, nome_peca, codigo_peca, tacto, lado, cor_peca, terminal_id")
-                    .eq("status", "entregue_no_posto")
+                    .in("status", ["entregue_no_posto", "aguardando_confirmacao", "aguardando_validacao_operador"])
                     .eq("terminal_id", myTerminalId);
 
                 if (data && data.length > 0) {
@@ -83,7 +83,7 @@ export const useRealtimeOrders = () => {
                 const { data } = await supabase
                     .from("chamados")
                     .select("id, nome_peca, codigo_peca, tacto, lado, cor_peca, terminal_id")
-                    .eq("status", "entregue_no_posto")
+                    .in("status", ["entregue_no_posto", "aguardando_confirmacao", "aguardando_validacao_operador"])
                     .gte("created_at", `${today}T00:00:00`);
 
                 if (data && data.length > 0) {
@@ -123,7 +123,7 @@ export const useRealtimeOrders = () => {
                         (savedId && record.id === savedId);
 
                     // Nova entrega sinalizada
-                    if (record.status === "entregue_no_posto") {
+                    if (record.status === "entregue_no_posto" || record.status === "aguardando_confirmacao" || record.status === "aguardando_validacao_operador") {
                         // Se for meu pedido OU se não tiver terminal_id (legado), mostrar
                         const shouldShow = isMyOrder || !record.terminal_id;
                         if (shouldShow) {
